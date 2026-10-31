@@ -1,0 +1,14 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# GymNotes uses hash-based routing (#/progress/...), so deep links never reach
+# the server and no SPA rewrite is strictly required. This entry is a harmless
+# safety net so any future non-hash route still serves the app shell.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

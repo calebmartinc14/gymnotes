@@ -1,0 +1,19 @@
+{
+  "name": "GymNotes — Strength tracker",
+  "short_name": "GymNotes",
+  "description": "A local-first workout tracker for sets, reps, weight and strength progress.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#080b09",
+  "theme_color": "#0a0d0c",
+  "icons": [
+    {
+      "src": "./favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
