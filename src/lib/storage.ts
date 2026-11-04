@@ -1,4 +1,4 @@
-import type { AppState, Exercise, Profile, SetEntry, Workout } from '../types'
+import type { AppState, Exercise, Habit, HabitCheck, Profile, SetEntry, Workout } from '../types'
 
 export const STORAGE_KEY = 'gymnotes:v1'
 export const STORAGE_VERSION = 1
@@ -7,6 +7,7 @@ export interface ValidationResult {
   ok: boolean
   workoutsSkipped: number
   exercisesSkipped: number
+  habitsSkipped: number
   profileIssues: string[]
   versionMismatch: boolean
 }
@@ -35,6 +36,8 @@ export function emptyState(): AppState {
     profile: defaultProfile(),
     customExercises: [],
     workouts: [],
+    habits: [],
+    habitChecks: [],
   }
 }
 
@@ -148,6 +151,35 @@ function normalizeExercise(value: unknown): Exercise | null {
   }
 }
 
+function normalizeHabit(value: unknown): Habit | null {
+  if (!value || typeof value !== 'object') return null
+  const raw = value as Partial<Habit>
+  if (typeof raw.id !== 'string' || !raw.id) return null
+  if (typeof raw.name !== 'string' || !raw.name.trim()) return null
+  const targetPerWeek = Math.round(numberOrNull(raw.targetPerWeek) ?? 7)
+  return {
+    id: raw.id,
+    name: raw.name.trim().slice(0, 60),
+    targetPerWeek: Math.min(7, Math.max(1, targetPerWeek)),
+    note: typeof raw.note === 'string' ? raw.note.slice(0, 1000) : '',
+    createdAt: numberOrNull(raw.createdAt) ?? Date.now(),
+  }
+}
+
+function normalizeHabitCheck(value: unknown): HabitCheck | null {
+  if (!value || typeof value !== 'object') return null
+  const raw = value as Partial<HabitCheck>
+  if (typeof raw.id !== 'string' || !raw.id) return null
+  if (typeof raw.habitId !== 'string' || !raw.habitId) return null
+  if (typeof raw.date !== 'string' || !isValidDate(raw.date)) return null
+  return {
+    id: raw.id,
+    habitId: raw.habitId,
+    date: raw.date,
+    createdAt: numberOrNull(raw.createdAt) ?? Date.now(),
+  }
+}
+
 function deduplicateWorkouts(workouts: Workout[]): Workout[] {
   const seen = new Set<string>()
   const result: Workout[] = []
@@ -178,10 +210,50 @@ function deduplicateExercises(exercises: Exercise[]): Exercise[] {
   return result
 }
 
+function deduplicateHabits(habits: Habit[]): Habit[] {
+  const seen = new Set<string>()
+  const result: Habit[] = []
+  for (const habit of habits) {
+    if (seen.has(habit.id)) {
+      result.push({ ...habit, id: newId('habit') })
+    } else {
+      seen.add(habit.id)
+      result.push(habit)
+    }
+  }
+  return result
+}
+
+/**
+ * Keeps one check per habit/day, drops checks for habits that no longer exist,
+ * and returns how many rows were discarded.
+ */
+function deduplicateHabitChecks(
+  checks: HabitCheck[],
+  habitIds: Set<string>,
+): { checks: HabitCheck[]; skipped: number } {
+  const seenIds = new Set<string>()
+  const seenDays = new Set<string>()
+  const result: HabitCheck[] = []
+  for (const check of checks) {
+    const dayKey = `${check.habitId}|${check.date}`
+    if (!habitIds.has(check.habitId) || seenDays.has(dayKey)) continue
+    seenDays.add(dayKey)
+    if (seenIds.has(check.id)) {
+      result.push({ ...check, id: newId('check') })
+    } else {
+      seenIds.add(check.id)
+      result.push(check)
+    }
+  }
+  return { checks: result, skipped: checks.length - result.length }
+}
+
 interface ParseOutput {
   state: AppState
   workoutsSkipped: number
   exercisesSkipped: number
+  habitsSkipped: number
   profileIssues: string[]
   versionMismatch: boolean
 }
@@ -192,6 +264,7 @@ function parseState(input: unknown): ParseOutput {
       state: emptyState(),
       workoutsSkipped: 0,
       exercisesSkipped: 0,
+      habitsSkipped: 0,
       profileIssues: ['Invalid backup format'],
       versionMismatch: false,
     }
@@ -217,10 +290,29 @@ function parseState(input: unknown): ParseOutput {
   const customExercises = deduplicateExercises(normalizedExercises)
   const exercisesSkipped = rawExercises.length - customExercises.length
 
+  const rawHabits = Array.isArray(raw.habits) ? raw.habits : []
+  const normalizedHabits = rawHabits
+    .map(normalizeHabit)
+    .filter((habit): habit is Habit => habit !== null)
+  const habits = deduplicateHabits(normalizedHabits)
+
+  const habitIds = new Set(habits.map((habit) => habit.id))
+  const rawChecks = Array.isArray(raw.habitChecks) ? raw.habitChecks : []
+  const normalizedChecks = rawChecks
+    .map(normalizeHabitCheck)
+    .filter((check): check is HabitCheck => check !== null)
+  const { checks: habitChecks, skipped: invalidChecks } = deduplicateHabitChecks(
+    normalizedChecks,
+    habitIds,
+  )
+  const habitsSkipped =
+    rawHabits.length - habits.length + (rawChecks.length - normalizedChecks.length) + invalidChecks
+
   return {
-    state: { version: STORAGE_VERSION, profile, customExercises, workouts },
+    state: { version: STORAGE_VERSION, profile, customExercises, workouts, habits, habitChecks },
     workoutsSkipped,
     exercisesSkipped,
+    habitsSkipped,
     profileIssues,
     versionMismatch,
   }
@@ -231,17 +323,19 @@ export function normalizeState(input: unknown): AppState {
 }
 
 export function validateImport(input: unknown): ValidationResult {
-  const { state, workoutsSkipped, exercisesSkipped, profileIssues, versionMismatch } =
+  const { state, workoutsSkipped, exercisesSkipped, habitsSkipped, profileIssues, versionMismatch } =
     parseState(input)
   const hasData =
     state.workouts.length > 0 ||
     state.profile.name.trim().length > 0 ||
-    state.customExercises.length > 0
+    state.customExercises.length > 0 ||
+    state.habits.length > 0
 
   return {
     ok: hasData,
     workoutsSkipped,
     exercisesSkipped,
+    habitsSkipped,
     profileIssues,
     versionMismatch,
   }

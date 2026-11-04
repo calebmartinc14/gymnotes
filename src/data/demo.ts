@@ -1,4 +1,4 @@
-import type { AppState, Workout } from '../types'
+import type { AppState, Habit, HabitCheck, Workout } from '../types'
 import { addDays, parseISODate, round, todayISO } from '../lib/calc'
 import { newId } from '../lib/storage'
 
@@ -39,6 +39,47 @@ export function demoState(): AppState {
     }
   }
 
+  const habits: Habit[] = [
+    {
+      id: 'demo-habit-train',
+      name: 'Train',
+      targetPerWeek: 4,
+      note: 'Four sessions a week. Consistency beats perfect programming.',
+      createdAt: parseISODate(addDays(today, -83)).getTime(),
+    },
+    {
+      id: 'demo-habit-walk',
+      name: 'Walk 10k steps',
+      targetPerWeek: 6,
+      note: 'Easy movement on rest days keeps recovery on track.',
+      createdAt: parseISODate(addDays(today, -83)).getTime(),
+    },
+    {
+      id: 'demo-habit-stretch',
+      name: 'Stretch 10 minutes',
+      targetPerWeek: 3,
+      note: 'Hips and shoulders after training.',
+      createdAt: parseISODate(addDays(today, -83)).getTime(),
+    },
+  ]
+
+  const habitChecks: HabitCheck[] = []
+  for (let daysAgo = 0; daysAgo < 84; daysAgo += 1) {
+    const date = addDays(today, -daysAgo)
+    const weekday = parseISODate(date).getDay()
+    const createdAt = parseISODate(date).getTime() + 20 * 60_000
+
+    if (weekday === 1 || weekday === 2 || weekday === 4 || weekday === 5) {
+      habitChecks.push({ id: newId('demo-check'), habitId: 'demo-habit-train', date, createdAt })
+    }
+    if (weekday !== 0 && daysAgo % 4 !== 1) {
+      habitChecks.push({ id: newId('demo-check'), habitId: 'demo-habit-walk', date, createdAt })
+    }
+    if (weekday === 1 || weekday === 3 || weekday === 6) {
+      habitChecks.push({ id: newId('demo-check'), habitId: 'demo-habit-stretch', date, createdAt })
+    }
+  }
+
   return {
     version: 1,
     profile: {
@@ -51,5 +92,7 @@ export function demoState(): AppState {
     },
     customExercises: [],
     workouts,
+    habits,
+    habitChecks,
   }
 }

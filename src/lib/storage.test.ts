@@ -67,6 +67,27 @@ describe('normalizeState', () => {
     expect(new Set(state.workouts.map((w) => w.id)).size).toBe(2)
   })
 
+  it('normalizes habits and drops orphan or duplicate checks', () => {
+    const input = {
+      version: 1,
+      habits: [
+        { id: 'h1', name: 'Run', targetPerWeek: 99, note: 'easy pace' },
+        { id: 'h2', name: '   ' },
+      ],
+      habitChecks: [
+        { id: 'c1', habitId: 'h1', date: '2026-03-04' },
+        { id: 'c2', habitId: 'h1', date: '2026-03-04' },
+        { id: 'c3', habitId: 'gone', date: '2026-03-05' },
+      ],
+    }
+    const state = normalizeState(input)
+
+    expect(state.habits).toHaveLength(1)
+    expect(state.habits[0].targetPerWeek).toBe(7)
+    expect(state.habitChecks).toHaveLength(1)
+    expect(validateImport(input).habitsSkipped).toBe(3)
+  })
+
   it('keeps bodyweight-only sets that have zero added weight', () => {
     const state = normalizeState({
       workouts: [

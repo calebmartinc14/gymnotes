@@ -231,7 +231,7 @@ export function addDays(iso: string, days: number): string {
   return toISODate(date)
 }
 
-function dateFormatter(style: 'short' | 'medium' | 'long'): Intl.DateTimeFormat {
+function dateFormatter(style: 'short' | 'medium' | 'long' | 'month'): Intl.DateTimeFormat {
   let formatter = dateFormatters[style]
   if (!formatter) {
     const options: Intl.DateTimeFormatOptions =
@@ -239,14 +239,19 @@ function dateFormatter(style: 'short' | 'medium' | 'long'): Intl.DateTimeFormat 
         ? { month: 'short', day: 'numeric' }
         : style === 'long'
           ? { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }
-          : { month: 'short', day: 'numeric', year: 'numeric' }
+          : style === 'month'
+            ? { month: 'long', year: 'numeric' }
+            : { month: 'short', day: 'numeric', year: 'numeric' }
     formatter = new Intl.DateTimeFormat(currentLocale, options)
     dateFormatters[style] = formatter
   }
   return formatter
 }
 
-export function formatDate(iso: string, style: 'short' | 'medium' | 'long' = 'medium'): string {
+export function formatDate(
+  iso: string,
+  style: 'short' | 'medium' | 'long' | 'month' = 'medium',
+): string {
   return dateFormatter(style).format(parseISODate(iso))
 }
 

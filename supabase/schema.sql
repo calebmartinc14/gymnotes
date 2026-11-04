@@ -54,11 +54,41 @@ create index if not exists workouts_user_id_idx on public.workouts (user_id);
 create index if not exists workouts_user_exercise_idx on public.workouts (user_id, exercise_id);
 
 -- ---------------------------------------------------------------------------
+-- Habits & check-ins (goals page)
+-- ---------------------------------------------------------------------------
+create table if not exists public.habits (
+  id              text primary key,
+  user_id         uuid        not null references auth.users (id) on delete cascade,
+  name            text        not null,
+  target_per_week integer     not null default 7 check (target_per_week between 1 and 7),
+  note            text        not null default '',
+  created_at      bigint      not null default 0,
+  updated_at      timestamptz not null default now()
+);
+
+create index if not exists habits_user_id_idx on public.habits (user_id);
+
+create table if not exists public.habit_checks (
+  id         text primary key,
+  user_id    uuid        not null references auth.users (id) on delete cascade,
+  habit_id   text        not null references public.habits (id) on delete cascade,
+  date       date        not null,
+  created_at bigint      not null default 0,
+  updated_at timestamptz not null default now(),
+  unique (habit_id, date)
+);
+
+create index if not exists habit_checks_user_id_idx on public.habit_checks (user_id);
+create index if not exists habit_checks_habit_id_idx on public.habit_checks (habit_id);
+
+-- ---------------------------------------------------------------------------
 -- Row Level Security
 -- ---------------------------------------------------------------------------
 alter table public.profiles         enable row level security;
 alter table public.custom_exercises enable row level security;
 alter table public.workouts         enable row level security;
+alter table public.habits           enable row level security;
+alter table public.habit_checks     enable row level security;
 
 drop policy if exists "profiles are owned by the user" on public.profiles;
 create policy "profiles are owned by the user"
@@ -75,6 +105,18 @@ create policy "custom exercises are owned by the user"
 drop policy if exists "workouts are owned by the user" on public.workouts;
 create policy "workouts are owned by the user"
   on public.workouts for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists "habits are owned by the user" on public.habits;
+create policy "habits are owned by the user"
+  on public.habits for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists "habit checks are owned by the user" on public.habit_checks;
+create policy "habit checks are owned by the user"
+  on public.habit_checks for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
@@ -97,4 +139,14 @@ create trigger profiles_touch_updated_at
 drop trigger if exists workouts_touch_updated_at on public.workouts;
 create trigger workouts_touch_updated_at
   before update on public.workouts
+  for each row execute function public.touch_updated_at();
+
+drop trigger if exists habits_touch_updated_at on public.habits;
+create trigger habits_touch_updated_at
+  before update on public.habits
+  for each row execute function public.touch_updated_at();
+
+drop trigger if exists habit_checks_touch_updated_at on public.habit_checks;
+create trigger habit_checks_touch_updated_at
+  before update on public.habit_checks
   for each row execute function public.touch_updated_at();

@@ -184,11 +184,14 @@ export function ProfilePage({
       let details = t('profile.importSummary', {
         workouts: next.workouts.length,
         exercises: next.customExercises.length,
+        habits: next.habits.length,
       })
       if (validation.workoutsSkipped > 0)
         details += t('profile.importSkipped', { count: validation.workoutsSkipped })
       if (validation.exercisesSkipped > 0)
         details += t('profile.importSkipped', { count: validation.exercisesSkipped })
+      if (validation.habitsSkipped > 0)
+        details += t('profile.importSkipped', { count: validation.habitsSkipped })
       if (validation.profileIssues.length > 0)
         details += t('profile.importProfileIssues', {
           issues: validation.profileIssues.join(', '),
@@ -205,12 +208,14 @@ export function ProfilePage({
       if (
         validation.workoutsSkipped > 0 ||
         validation.exercisesSkipped > 0 ||
+        validation.habitsSkipped > 0 ||
         validation.profileIssues.length > 0
       ) {
         notify(
           t('profile.importRestoredSkipped', {
             workouts: validation.workoutsSkipped,
             exercises: validation.exercisesSkipped,
+            habits: validation.habitsSkipped,
           }),
         )
       }

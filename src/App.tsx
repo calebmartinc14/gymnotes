@@ -1,13 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { AppState, Exercise, Profile, Tab, Workout } from './types'
+import type {
+  AppState,
+  Exercise,
+  Habit,
+  HabitCheck,
+  HabitDraft,
+  Profile,
+  Tab,
+  Workout,
+} from './types'
+import { CalendarPage } from './components/Calendar'
 import { Dashboard } from './components/Dashboard'
+import { GoalsPage } from './components/Goals'
 import { LogWorkout } from './components/LogWorkout'
 import { Progress } from './components/Progress'
 import { ProfilePage } from './components/Profile'
 import { AuthScreen } from './components/AuthScreen'
 import { LanguageSwitch } from './components/LanguageSwitch'
 import {
+  CalendarIcon,
   ChartIcon,
   CheckIcon,
   CloseIcon,
@@ -15,21 +27,33 @@ import {
   GridIcon,
   LogOutIcon,
   PlusIcon,
+  TargetIcon,
   UserIcon,
   WarningIcon,
 } from './components/Icons'
 import { personalRecordIds } from './lib/calc'
 import { demoState } from './data/demo'
-import { emptyState, loadState, normalizeState, saveState, STORAGE_KEY } from './lib/storage'
+import {
+  emptyState,
+  loadState,
+  newId,
+  normalizeState,
+  saveState,
+  STORAGE_KEY,
+} from './lib/storage'
 import { useI18n } from './lib/i18n'
 import { useAuth } from './lib/auth'
 import {
   fetchState,
   hasData,
   removeExercise as removeExerciseRemote,
+  removeHabit as removeHabitRemote,
+  removeHabitCheck as removeHabitCheckRemote,
   removeWorkout as removeWorkoutRemote,
   replaceAll,
   saveExercise as saveExerciseRemote,
+  saveHabit as saveHabitRemote,
+  saveHabitCheck as saveHabitCheckRemote,
   saveProfile as saveProfileRemote,
   saveWorkout as saveWorkoutRemote,
 } from './lib/remote'
@@ -41,7 +65,7 @@ interface ToastState {
   persistent?: boolean
 }
 
-const TAB_IDS: Tab[] = ['dashboard', 'log', 'progress', 'profile']
+const TAB_IDS: Tab[] = ['dashboard', 'log', 'progress', 'calendar', 'goals', 'profile']
 
 /** Which account the local cache belongs to, so it is never offered to another user. */
 const LOCAL_OWNER_KEY = 'gymnotes:local-owner'
@@ -217,6 +241,8 @@ export default function App() {
       dashboard: t('title.dashboard'),
       log: t('title.log'),
       progress: t('title.progress'),
+      calendar: t('title.calendar'),
+      goals: t('title.goals'),
       profile: t('title.profile'),
     }
     document.title = `GymNotes — ${titles[tab]}`
@@ -337,6 +363,57 @@ export default function App() {
     void pushRemote(() => saveProfileRemote(userId as string, profile))
   }
 
+  function addHabit(draft: HabitDraft) {
+    const habit: Habit = { ...draft, id: newId('habit'), createdAt: Date.now() }
+    setState((current) => ({ ...current, habits: [...current.habits, habit] }))
+    notify(t('toast.habitAdded'))
+    void pushRemote(() => saveHabitRemote(userId as string, habit))
+  }
+
+  function updateHabit(habit: Habit) {
+    setState((current) => ({
+      ...current,
+      habits: current.habits.map((item) => (item.id === habit.id ? habit : item)),
+    }))
+    notify(t('toast.habitUpdated'))
+    void pushRemote(() => saveHabitRemote(userId as string, habit))
+  }
+
+  function deleteHabit(id: string) {
+    const habit = state.habits.find((item) => item.id === id)
+    if (!habit) return
+    if (!window.confirm(t('confirm.deleteHabit', { name: habit.name }))) return
+    setState((current) => ({
+      ...current,
+      habits: current.habits.filter((item) => item.id !== id),
+      habitChecks: current.habitChecks.filter((check) => check.habitId !== id),
+    }))
+    notify(t('toast.habitDeleted'))
+    void pushRemote(() => removeHabitRemote(id))
+  }
+
+  function toggleHabitCheck(habitId: string, date: string) {
+    const existing = state.habitChecks.find(
+      (check) => check.habitId === habitId && check.date === date,
+    )
+    if (existing) {
+      setState((current) => ({
+        ...current,
+        habitChecks: current.habitChecks.filter((check) => check.id !== existing.id),
+      }))
+      void pushRemote(() => removeHabitCheckRemote(existing.id))
+      return
+    }
+    const check: HabitCheck = {
+      id: newId('check'),
+      habitId,
+      date,
+      createdAt: Date.now(),
+    }
+    setState((current) => ({ ...current, habitChecks: [...current.habitChecks, check] }))
+    void pushRemote(() => saveHabitCheckRemote(userId as string, check))
+  }
+
   function importData(next: AppState) {
     setState(next)
     notify(t('toast.backupRestored'))
@@ -385,6 +462,8 @@ export default function App() {
     { id: 'dashboard', label: t('nav.dashboard'), icon: <GridIcon size={19} /> },
     { id: 'log', label: t('nav.log'), icon: <PlusIcon size={19} /> },
     { id: 'progress', label: t('nav.progress'), icon: <ChartIcon size={19} /> },
+    { id: 'calendar', label: t('nav.calendar'), icon: <CalendarIcon size={19} /> },
+    { id: 'goals', label: t('nav.goals'), icon: <TargetIcon size={19} /> },
     { id: 'profile', label: t('nav.profile'), icon: <UserIcon size={19} /> },
   ]
 
@@ -500,6 +579,18 @@ export default function App() {
             onEditWorkout={startEdit}
             onLog={() => go('log')}
             onProfile={() => go('profile')}
+          />
+        )}
+        {tab === 'calendar' && (
+          <CalendarPage state={state} onLog={() => go('log')} onProgress={goProgress} />
+        )}
+        {tab === 'goals' && (
+          <GoalsPage
+            state={state}
+            onAddHabit={addHabit}
+            onUpdateHabit={updateHabit}
+            onDeleteHabit={deleteHabit}
+            onToggleCheck={toggleHabitCheck}
           />
         )}
         {tab === 'profile' && (

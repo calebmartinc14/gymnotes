@@ -1,0 +1,491 @@
+.goals-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.42fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.goals-heatmap-card .card-head {
+  margin-bottom: 2px;
+}
+
+.goals-heatmap-card .fineprint {
+  margin-top: 9px;
+}
+
+.heatmap {
+  --heat-size: 11px;
+  display: flex;
+  gap: 6px;
+  margin: 14px 0 4px;
+}
+
+.heatmap-compact {
+  --heat-size: 9px;
+}
+
+.heatmap-weekdays {
+  display: grid;
+  flex-shrink: 0;
+  grid-template-rows: repeat(7, var(--heat-size));
+  gap: 3px;
+}
+
+.heatmap-weekdays span {
+  color: var(--muted-2);
+  font-size: 0.49rem;
+  line-height: var(--heat-size);
+}
+
+.heatmap-scroll {
+  min-width: 0;
+  flex: 1;
+  padding-bottom: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.heatmap-grid {
+  display: flex;
+  width: max-content;
+  gap: 3px;
+}
+
+.heatmap-week {
+  display: grid;
+  grid-template-rows: repeat(7, var(--heat-size));
+  gap: 3px;
+}
+
+.heat-cell {
+  display: inline-block;
+  width: var(--heat-size, 11px);
+  height: var(--heat-size, 11px);
+  border-radius: 2px;
+  background: var(--heat-0);
+}
+
+.heat-cell.heat-1 {
+  background: var(--heat-1);
+}
+
+.heat-cell.heat-2 {
+  background: var(--heat-2);
+}
+
+.heat-cell.heat-3 {
+  background: var(--heat-3);
+}
+
+.heat-cell.heat-4 {
+  background: var(--heat-4);
+}
+
+.heat-cell.is-future {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.035);
+}
+
+.heat-cell:hover {
+  outline: 1px solid rgba(200, 241, 105, 0.45);
+  outline-offset: 1px;
+}
+
+.heat-legend {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted-2);
+  font-size: 0.6rem;
+  white-space: nowrap;
+}
+
+.heat-legend .heat-cell {
+  width: 10px;
+  height: 10px;
+}
+
+.goal-today-list {
+  display: flex;
+  margin-top: 8px;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.goal-today-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 8px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.018);
+  color: inherit;
+  text-align: left;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.goal-today-row:hover {
+  border-color: var(--border);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.goal-today-row.is-done {
+  border-color: rgba(57, 211, 83, 0.18);
+  background: rgba(57, 211, 83, 0.06);
+}
+
+.goal-check-circle {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 50%;
+  background: transparent;
+  color: #06130a;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.goal-today-row.is-done .goal-check-circle {
+  border-color: var(--heat-4);
+  background: var(--heat-4);
+  box-shadow: 0 0 12px -2px rgba(57, 211, 83, 0.55);
+}
+
+.goal-today-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.goal-today-copy strong {
+  overflow: hidden;
+  font-size: 0.78rem;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.goal-today-copy span {
+  color: var(--muted-2);
+  font-size: 0.62rem;
+}
+
+.goal-today-week {
+  flex-shrink: 0;
+  color: var(--muted-2);
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.goals-habits {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.goals-habits-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 2px 0;
+}
+
+.goals-habits-head h2 {
+  margin: 3px 0 0;
+  font-size: 1.25rem;
+  letter-spacing: -0.03em;
+}
+
+.habit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 13px;
+}
+
+.habit-card {
+  display: flex;
+  padding: 19px;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.habit-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.habit-title {
+  display: flex;
+  min-width: 0;
+  gap: 9px;
+}
+
+.habit-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: rgba(57, 211, 83, 0.11);
+  color: var(--heat-4);
+}
+
+.habit-title > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.habit-title strong {
+  overflow: hidden;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.habit-title span {
+  color: var(--muted-2);
+  font-size: 0.63rem;
+}
+
+.habit-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 3px;
+}
+
+.habit-actions .icon-btn {
+  width: 30px;
+  height: 30px;
+}
+
+.habit-week-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.habit-progress-head {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted-2);
+  font-size: 0.63rem;
+}
+
+.habit-progress-head strong {
+  color: var(--text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.habit-progress-track {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.habit-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--heat-2), var(--heat-4));
+  transition: width 0.4s ease;
+}
+
+.habit-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.habit-day {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 2px;
+  flex-direction: column;
+  gap: 1px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.018);
+  color: var(--muted);
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.habit-day span {
+  color: var(--muted-2);
+  font-size: 0.48rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.habit-day strong {
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.habit-day:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.habit-day.is-done {
+  border-color: rgba(57, 211, 83, 0.24);
+  background: rgba(57, 211, 83, 0.12);
+  color: #eaffea;
+}
+
+.habit-day.is-done span {
+  color: #8fdfa0;
+}
+
+.habit-day.is-today {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.habit-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted-2);
+  font-size: 0.61rem;
+}
+
+.habit-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.habit-meta svg {
+  color: var(--gold);
+}
+
+.habit-card .heatmap {
+  margin: 0;
+}
+
+.habit-note {
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.habit-note-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: var(--muted-2);
+  font-size: 0.6rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.habit-note-text,
+.habit-note-empty {
+  margin: 0;
+  font-size: 0.71rem;
+  line-height: 1.55;
+}
+
+.habit-note-text {
+  color: var(--muted);
+}
+
+.habit-note-empty {
+  color: var(--muted-2);
+  font-style: italic;
+}
+
+.habit-note-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.habit-note-edit textarea {
+  min-height: 64px;
+  font-size: 0.75rem;
+}
+
+.habit-note-edit .btn {
+  align-self: flex-start;
+}
+
+.habit-form-card {
+  padding: 22px;
+}
+
+.habit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.habit-form-head h3 {
+  margin: 3px 0 0;
+  font-size: 1.05rem;
+  letter-spacing: -0.03em;
+}
+
+.goal-target-picker {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.goal-target-picker button {
+  padding: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.goal-target-picker button:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.goal-target-picker button.active {
+  border-color: rgba(57, 211, 83, 0.35);
+  background: rgba(57, 211, 83, 0.14);
+  color: var(--heat-4);
+}
+
+.habit-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

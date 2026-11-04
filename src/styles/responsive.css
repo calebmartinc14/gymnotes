@@ -1,6 +1,8 @@
 @media (max-width: 1120px) {
   .dashboard-grid,
-  .progress-grid {
+  .progress-grid,
+  .calendar-layout,
+  .goals-grid {
     grid-template-columns: 1fr;
   }
 
@@ -106,7 +108,7 @@
     left: 0;
     z-index: 60;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     gap: 0;
     padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
     border-right: 0;
@@ -241,6 +243,10 @@
   .profile-side {
     grid-template-columns: 1fr;
   }
+
+  .habit-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 640px) {
@@ -268,6 +274,27 @@
   .card {
     padding: 18px;
     border-radius: 17px;
+  }
+
+  .calendar-card {
+    padding: 16px;
+  }
+
+  .cal-cell {
+    min-height: 54px;
+    padding: 6px;
+  }
+
+  .cal-weekdays span {
+    font-size: 0.53rem;
+  }
+
+  .cal-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .goals-habits-head h2 {
+    font-size: 1.12rem;
   }
 
   .hero {
@@ -459,6 +486,17 @@
 }
 
 @media (max-width: 480px) {
+  .main-nav button {
+    padding: 6px 2px;
+    font-size: 0.54rem;
+    gap: 2px;
+  }
+
+  .main-nav button svg {
+    width: 17px;
+    height: 17px;
+  }
+
   .exercise-grid {
     grid-template-columns: 1fr;
     max-height: 330px;

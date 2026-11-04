@@ -15,6 +15,11 @@
   --danger: #ff7a7a;
   --blue: #7cc4ff;
   --gold: #ffcf6b;
+  --heat-0: rgba(255, 255, 255, 0.055);
+  --heat-1: #0e4429;
+  --heat-2: #006d32;
+  --heat-3: #26a641;
+  --heat-4: #39d353;
   --radius: 20px;
   --shadow: 0 24px 60px -32px rgba(0, 0, 0, 0.85);
   --font:

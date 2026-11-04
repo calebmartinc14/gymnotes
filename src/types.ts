@@ -1,4 +1,4 @@
-export type Tab = 'dashboard' | 'log' | 'progress' | 'profile'
+export type Tab = 'dashboard' | 'log' | 'progress' | 'calendar' | 'goals' | 'profile'
 
 export type Sex = 'male' | 'female' | 'other'
 export type Unit = 'kg' | 'lb'
@@ -43,9 +43,34 @@ export interface Profile {
   unit: Unit
 }
 
+/** A user-defined habit tracked on the goals page. */
+export interface Habit {
+  id: string
+  name: string
+  /** How many times per week the habit should be completed (1–7). */
+  targetPerWeek: number
+  /** Free-form note shown on the habit card. */
+  note: string
+  createdAt: number
+}
+
+/** One completed habit on one day. Presence means "done". */
+export interface HabitCheck {
+  id: string
+  habitId: string
+  /** YYYY-MM-DD (local). */
+  date: string
+  createdAt: number
+}
+
+/** Fields needed to create or edit a habit; the id/createdAt are managed by the app. */
+export type HabitDraft = Pick<Habit, 'name' | 'targetPerWeek' | 'note'>
+
 export interface AppState {
   version: 1
   profile: Profile
   customExercises: Exercise[]
   workouts: Workout[]
+  habits: Habit[]
+  habitChecks: HabitCheck[]
 }
