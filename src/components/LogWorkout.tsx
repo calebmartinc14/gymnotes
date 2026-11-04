@@ -29,6 +29,7 @@ import { PageHead } from './ui'
 
 interface LogWorkoutProps {
   state: AppState
+  initialDate?: string
   editing?: Workout | null
   onSave: (workout: Workout) => void
   onUpdate?: (workout: Workout) => void
@@ -57,6 +58,7 @@ function rowsFromWorkout(workout: Workout, unit: 'kg' | 'lb'): SetRow[] {
 
 export function LogWorkout({
   state,
+  initialDate,
   editing,
   onSave,
   onUpdate,
@@ -74,7 +76,7 @@ export function LogWorkout({
   )
   const [search, setSearch] = useState('')
   const [group, setGroup] = useState<MuscleGroup | 'All'>('All')
-  const [date, setDate] = useState(editing?.date ?? todayISO())
+  const [date, setDate] = useState(editing?.date ?? initialDate ?? todayISO())
   const [sets, setSets] = useState<SetRow[]>(() =>
     editing ? rowsFromWorkout(editing, unit) : blankSets(),
   )
@@ -92,6 +94,10 @@ export function LogWorkout({
     setNotes(editing.notes ?? '')
     setError('')
   }, [editing, unit])
+
+  useEffect(() => {
+    if (!editing && initialDate) setDate(initialDate)
+  }, [editing, initialDate])
 
   const selected = getExercise(selectedId, customExercises)
   const isBodyweight = selected?.bodyweight === true

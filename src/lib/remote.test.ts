@@ -3,6 +3,8 @@ import {
   exerciseFromRow,
   exerciseToRow,
   hasData,
+  isMissingTableError,
+  isSchemaError,
   profileFromRow,
   profileToRow,
   stateFromRows,
@@ -26,7 +28,13 @@ describe('workout row mapping', () => {
     const row = workoutToRow('user-1', workout)
     expect(row.user_id).toBe('user-1')
     expect(row.bodyweight_kg).toBe(80)
-    expect(workoutFromRow(row)).toEqual(workout)
+    expect(workoutFromRow(row)).toEqual({
+      ...workout,
+      sessionId: null,
+      sessionName: undefined,
+      supersetGroup: null,
+      position: 0,
+    })
   })
 
   it('maps a missing note to undefined', () => {
@@ -113,6 +121,50 @@ describe('stateFromRows', () => {
     )
     expect(state.workouts).toHaveLength(1)
     expect(state.customExercises).toHaveLength(1)
+  })
+})
+
+describe('isMissingTableError', () => {
+  it('detects a missing relation from postgres', () => {
+    expect(
+      isMissingTableError({
+        code: '42P01',
+        message: 'relation "public.habits" does not exist',
+      }),
+    ).toBe(true)
+  })
+
+  it('detects a table missing from the PostgREST schema cache', () => {
+    expect(
+      isMissingTableError({
+        code: 'PGRST205',
+        message: "Could not find the table 'public.habits' in the schema cache",
+      }),
+    ).toBe(true)
+  })
+
+  it('does not treat a missing column as a missing table', () => {
+    expect(
+      isMissingTableError({
+        code: 'PGRST204',
+        message: "Could not find the 'note' column of 'habits' in the schema cache",
+      }),
+    ).toBe(false)
+  })
+
+  it('ignores unrelated errors', () => {
+    expect(isMissingTableError({ code: '23505', message: 'duplicate key value' })).toBe(false)
+    expect(isMissingTableError(null)).toBe(false)
+  })
+
+  it('recognises schema errors without conflating missing columns with missing tables', () => {
+    const missingColumn = {
+      code: 'PGRST204',
+      message: "Could not find the 'note' column of 'habits' in the schema cache",
+    }
+    expect(isMissingTableError(missingColumn)).toBe(false)
+    expect(isSchemaError(missingColumn)).toBe(true)
+    expect(isSchemaError({ code: '42501', message: 'permission denied' })).toBe(false)
   })
 })
 

@@ -192,6 +192,8 @@ export function ProfilePage({
         details += t('profile.importSkipped', { count: validation.exercisesSkipped })
       if (validation.habitsSkipped > 0)
         details += t('profile.importSkipped', { count: validation.habitsSkipped })
+      if (validation.routinesSkipped > 0)
+        details += t('profile.importSkipped', { count: validation.routinesSkipped })
       if (validation.profileIssues.length > 0)
         details += t('profile.importProfileIssues', {
           issues: validation.profileIssues.join(', '),
@@ -209,6 +211,7 @@ export function ProfilePage({
         validation.workoutsSkipped > 0 ||
         validation.exercisesSkipped > 0 ||
         validation.habitsSkipped > 0 ||
+        validation.routinesSkipped > 0 ||
         validation.profileIssues.length > 0
       ) {
         notify(
@@ -216,6 +219,7 @@ export function ProfilePage({
             workouts: validation.workoutsSkipped,
             exercises: validation.exercisesSkipped,
             habits: validation.habitsSkipped,
+            routines: validation.routinesSkipped,
           }),
         )
       }

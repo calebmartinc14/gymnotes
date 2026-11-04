@@ -81,7 +81,7 @@ export function demoState(): AppState {
   }
 
   return {
-    version: 1,
+    version: 2,
     profile: {
       name: 'Alex',
       sex: 'male',
@@ -94,5 +94,6 @@ export function demoState(): AppState {
     workouts,
     habits,
     habitChecks,
+    routines: [],
   }
 }

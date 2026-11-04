@@ -19,6 +19,7 @@ import {
   isHabitDone,
   sessionLevel,
 } from '../lib/habits'
+import { countSessions } from '../lib/sessions'
 import { exerciseLabel, useI18n } from '../lib/i18n'
 import {
   CalendarIcon,
@@ -32,7 +33,7 @@ import { PageHead } from './ui'
 
 interface CalendarPageProps {
   state: AppState
-  onLog: () => void
+  onLog: (date?: string) => void
   onProgress: (exerciseId?: string) => void
 }
 
@@ -88,6 +89,7 @@ export function CalendarPage({ state, onLog, onProgress }: CalendarPageProps) {
     () => workouts.filter((workout) => workout.date.startsWith(monthPrefix)),
     [workouts, monthPrefix],
   )
+  const monthSessions = countSessions(monthWorkouts)
   const monthVolume = totalVolume(monthWorkouts)
   const monthDays = new Set(monthWorkouts.map((workout) => workout.date)).size
   const monthHabitChecks = habitChecks.filter(
@@ -95,6 +97,7 @@ export function CalendarPage({ state, onLog, onProgress }: CalendarPageProps) {
   ).length
 
   const dayWorkouts = workoutByDate.get(selected) ?? []
+  const daySessions = countSessions(dayWorkouts)
   const dayHabits = habits.filter((habit) => isHabitDone(checkIndex, habit.id, selected))
 
   function moveMonth(delta: number) {
@@ -117,7 +120,7 @@ export function CalendarPage({ state, onLog, onProgress }: CalendarPageProps) {
         title={t('calendar.title')}
         subtitle={t('calendar.subtitle')}
         actions={
-          <button type="button" className="btn btn-primary" onClick={onLog}>
+          <button type="button" className="btn btn-primary" onClick={() => onLog()}>
             <PlusIcon size={17} />
             {t('action.logWorkout')}
           </button>
@@ -163,7 +166,7 @@ export function CalendarPage({ state, onLog, onProgress }: CalendarPageProps) {
           <div className="cal-grid">
             {cells.map((date, index) => {
               if (!date) return <span className="cal-cell is-empty" key={`empty-${index}`} />
-              const sessions = workoutByDate.get(date)?.length ?? 0
+              const sessions = countSessions(workoutByDate.get(date) ?? [])
               const completion = dailyCompletion(habits, checkIndex, date)
               const level = sessionLevel(sessions)
               const isToday = date === today
@@ -200,7 +203,7 @@ export function CalendarPage({ state, onLog, onProgress }: CalendarPageProps) {
 
           <div className="cal-summary">
             <div>
-              <strong>{monthWorkouts.length}</strong>
+              <strong>{monthSessions}</strong>
               <span>{t('calendar.monthSessions')}</span>
             </div>
             <div>
@@ -224,7 +227,7 @@ export function CalendarPage({ state, onLog, onProgress }: CalendarPageProps) {
               <span className="card-kicker">{t('calendar.dayKicker')}</span>
               <h3>{formatDate(selected, 'long')}</h3>
             </div>
-            <span className="count-badge">{dayWorkouts.length}</span>
+            <span className="count-badge">{daySessions}</span>
           </div>
 
           {dayWorkouts.length === 0 && dayHabits.length === 0 ? (
@@ -291,7 +294,11 @@ export function CalendarPage({ state, onLog, onProgress }: CalendarPageProps) {
             </div>
           )}
 
-          <button type="button" className="btn btn-ghost btn-sm btn-block" onClick={onLog}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm btn-block"
+            onClick={() => onLog(selected)}
+          >
             <PlusIcon size={15} />
             {t('calendar.logThisDay')}
           </button>

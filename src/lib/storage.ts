@@ -1,13 +1,51 @@
-import type { AppState, Exercise, Habit, HabitCheck, Profile, SetEntry, Workout } from '../types'
+import type {
+  AppState,
+  Exercise,
+  Habit,
+  HabitCheck,
+  Profile,
+  Routine,
+  RoutineEntry,
+  SetEntry,
+  Workout,
+} from '../types'
 
 export const STORAGE_KEY = 'gymnotes:v1'
-export const STORAGE_VERSION = 1
+export const LOCAL_OWNER_KEY = 'gymnotes:local-owner'
+export const STORAGE_VERSION = 2
+
+export function readLocalOwner(): string | null {
+  try {
+    return localStorage.getItem(LOCAL_OWNER_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function writeLocalOwner(userId: string): void {
+  try {
+    localStorage.setItem(LOCAL_OWNER_KEY, userId)
+  } catch {
+    // Ignore private-mode and quota errors.
+  }
+}
+
+/** Remove one signed-in account's cached state without discarding queued writes. */
+export function clearLocalAccountCache(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem(LOCAL_OWNER_KEY)
+  } catch {
+    // Keep the in-memory account boundary even when storage is unavailable.
+  }
+}
 
 export interface ValidationResult {
   ok: boolean
   workoutsSkipped: number
   exercisesSkipped: number
   habitsSkipped: number
+  routinesSkipped: number
   profileIssues: string[]
   versionMismatch: boolean
 }
@@ -38,6 +76,7 @@ export function emptyState(): AppState {
     workouts: [],
     habits: [],
     habitChecks: [],
+    routines: [],
   }
 }
 
@@ -125,6 +164,15 @@ function normalizeWorkout(value: unknown): Workout | null {
   if (typeof raw.exerciseId !== 'string' || !raw.exerciseId) return null
   const sets = normalizeSets(raw.sets)
   if (sets.length === 0) return null
+  const sessionId =
+    typeof raw.sessionId === 'string' && raw.sessionId ? raw.sessionId : null
+  const sessionName =
+    typeof raw.sessionName === 'string' && raw.sessionName.trim()
+      ? raw.sessionName.trim().slice(0, 60)
+      : undefined
+  const supersetGroup = normalizeSupersetGroup(raw.supersetGroup)
+  const position = Math.max(0, Math.round(numberOrNull(raw.position) ?? 0))
+
   return {
     id: typeof raw.id === 'string' && raw.id ? raw.id : newId('workout'),
     date: raw.date,
@@ -133,7 +181,64 @@ function normalizeWorkout(value: unknown): Workout | null {
     bodyweightKg: numberOrNull(raw.bodyweightKg),
     notes: typeof raw.notes === 'string' ? raw.notes.slice(0, 500) : undefined,
     createdAt: numberOrNull(raw.createdAt) ?? Date.now(),
+    sessionId,
+    sessionName,
+    supersetGroup,
+    position,
   }
+}
+
+function normalizeSupersetGroup(value: unknown): number | null {
+  const number = numberOrNull(value)
+  if (number === null || number < 1) return null
+  return Math.round(number)
+}
+
+function normalizeRoutine(value: unknown): Routine | null {
+  if (!value || typeof value !== 'object') return null
+  const raw = value as Partial<Routine>
+  if (typeof raw.id !== 'string' || !raw.id) return null
+  if (typeof raw.name !== 'string' || !raw.name.trim()) return null
+
+  const rawEntries = Array.isArray(raw.entries) ? raw.entries : []
+  const entries = rawEntries
+    .map((entry): RoutineEntry | null => {
+      if (!entry || typeof entry !== 'object') return null
+      const rawEntry = entry as Partial<RoutineEntry>
+      if (typeof rawEntry.exerciseId !== 'string' || !rawEntry.exerciseId) return null
+      const sets = Math.round(numberOrNull(rawEntry.sets) ?? 0)
+      const reps = Math.round(numberOrNull(rawEntry.reps) ?? 0)
+      if (sets < 1 || sets > 20 || reps < 1 || reps > 100) return null
+      return {
+        exerciseId: rawEntry.exerciseId,
+        sets,
+        reps,
+        supersetGroup: normalizeSupersetGroup(rawEntry.supersetGroup),
+      }
+    })
+    .filter((entry): entry is RoutineEntry => entry !== null)
+
+  if (entries.length === 0) return null
+
+  return {
+    id: raw.id,
+    name: raw.name.trim().slice(0, 60),
+    entries,
+    createdAt: numberOrNull(raw.createdAt) ?? Date.now(),
+  }
+}
+
+function deduplicateRoutines(routines: Routine[]): Routine[] {
+  const seen = new Set<string>()
+  const result: Routine[] = []
+  for (const routine of routines) {
+    if (seen.has(routine.id)) result.push({ ...routine, id: newId('routine') })
+    else {
+      seen.add(routine.id)
+      result.push(routine)
+    }
+  }
+  return result
 }
 
 function normalizeExercise(value: unknown): Exercise | null {
@@ -254,6 +359,7 @@ interface ParseOutput {
   workoutsSkipped: number
   exercisesSkipped: number
   habitsSkipped: number
+  routinesSkipped: number
   profileIssues: string[]
   versionMismatch: boolean
 }
@@ -265,6 +371,7 @@ function parseState(input: unknown): ParseOutput {
       workoutsSkipped: 0,
       exercisesSkipped: 0,
       habitsSkipped: 0,
+      routinesSkipped: 0,
       profileIssues: ['Invalid backup format'],
       versionMismatch: false,
     }
@@ -308,11 +415,27 @@ function parseState(input: unknown): ParseOutput {
   const habitsSkipped =
     rawHabits.length - habits.length + (rawChecks.length - normalizedChecks.length) + invalidChecks
 
+  const rawRoutines = Array.isArray(raw.routines) ? raw.routines : []
+  const normalizedRoutines = rawRoutines
+    .map(normalizeRoutine)
+    .filter((routine): routine is Routine => routine !== null)
+  const routines = deduplicateRoutines(normalizedRoutines)
+  const routinesSkipped = rawRoutines.length - routines.length
+
   return {
-    state: { version: STORAGE_VERSION, profile, customExercises, workouts, habits, habitChecks },
+    state: {
+      version: STORAGE_VERSION,
+      profile,
+      customExercises,
+      workouts,
+      habits,
+      habitChecks,
+      routines,
+    },
     workoutsSkipped,
     exercisesSkipped,
     habitsSkipped,
+    routinesSkipped,
     profileIssues,
     versionMismatch,
   }
@@ -323,19 +446,28 @@ export function normalizeState(input: unknown): AppState {
 }
 
 export function validateImport(input: unknown): ValidationResult {
-  const { state, workoutsSkipped, exercisesSkipped, habitsSkipped, profileIssues, versionMismatch } =
-    parseState(input)
+  const {
+    state,
+    workoutsSkipped,
+    exercisesSkipped,
+    habitsSkipped,
+    routinesSkipped,
+    profileIssues,
+    versionMismatch,
+  } = parseState(input)
   const hasData =
     state.workouts.length > 0 ||
     state.profile.name.trim().length > 0 ||
     state.customExercises.length > 0 ||
-    state.habits.length > 0
+    state.habits.length > 0 ||
+    state.routines.length > 0
 
   return {
     ok: hasData,
     workoutsSkipped,
     exercisesSkipped,
     habitsSkipped,
+    routinesSkipped,
     profileIssues,
     versionMismatch,
   }

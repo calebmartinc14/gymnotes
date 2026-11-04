@@ -5,6 +5,8 @@ import type {
   HabitCheck,
   MuscleGroup,
   Profile,
+  Routine,
+  RoutineEntry,
   SetEntry,
   Sex,
   Unit,
@@ -43,6 +45,18 @@ export interface WorkoutRow {
   bodyweight_kg: number | null
   notes: string | null
   created_at: number
+  session_id?: string | null
+  session_name?: string | null
+  superset_group?: number | null
+  position?: number | null
+}
+
+export interface RoutineRow {
+  id: string
+  user_id: string
+  name: string
+  entries: RoutineEntry[]
+  created_at: number
 }
 
 export interface HabitRow {
@@ -75,6 +89,10 @@ export function workoutFromRow(row: WorkoutRow): Workout {
     bodyweightKg: row.bodyweight_kg ?? null,
     notes: row.notes ?? undefined,
     createdAt: Number(row.created_at) || 0,
+    sessionId: row.session_id ?? null,
+    sessionName: row.session_name ?? undefined,
+    supersetGroup: row.superset_group ?? null,
+    position: Number(row.position) || 0,
   }
 }
 
@@ -88,6 +106,39 @@ export function workoutToRow(userId: string, workout: Workout): WorkoutRow {
     bodyweight_kg: workout.bodyweightKg,
     notes: workout.notes ?? null,
     created_at: workout.createdAt,
+    session_id: workout.sessionId ?? null,
+    session_name: workout.sessionName ?? null,
+    superset_group: workout.supersetGroup ?? null,
+    position: workout.position ?? 0,
+  }
+}
+
+export function routineFromRow(row: RoutineRow): Routine {
+  const entries = Array.isArray(row.entries)
+    ? row.entries.filter(
+        (entry): entry is RoutineEntry =>
+          Boolean(
+            entry &&
+              typeof entry === 'object' &&
+              typeof (entry as RoutineEntry).exerciseId === 'string',
+          ),
+      )
+    : []
+  return {
+    id: row.id,
+    name: row.name,
+    entries,
+    createdAt: Number(row.created_at) || 0,
+  }
+}
+
+export function routineToRow(userId: string, routine: Routine): RoutineRow {
+  return {
+    id: routine.id,
+    user_id: userId,
+    name: routine.name,
+    entries: routine.entries,
+    created_at: routine.createdAt,
   }
 }
 
@@ -181,14 +232,16 @@ export function stateFromRows(
   workouts: Workout[],
   habits: Habit[] = [],
   habitChecks: HabitCheck[] = [],
+  routines: Routine[] = [],
 ): AppState {
   return normalizeState({
-    version: 1,
+    version: 2,
     profile,
     customExercises,
     workouts,
     habits,
     habitChecks,
+    routines,
   })
 }
 
@@ -197,6 +250,7 @@ export function hasData(state: AppState): boolean {
     state.workouts.length > 0 ||
     state.customExercises.length > 0 ||
     state.habits.length > 0 ||
+    state.routines.length > 0 ||
     state.profile.name.trim().length > 0
   )
 }
@@ -208,24 +262,48 @@ export function hasData(state: AppState): boolean {
 /** True when the remote project has not run the latest schema migration yet. */
 export function isMissingTableError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false
-  const { code, message } = error as { code?: string; message?: string }
-  return code === '42P01' || /does not exist/i.test(message ?? '')
+  const { code, message, details, hint } = error as {
+    code?: string
+    message?: string
+    details?: string
+    hint?: string
+  }
+  if (code === '42P01' || code === 'PGRST205') return true
+  if (code === 'PGRST204') return false
+  const text = [message, details, hint].filter(Boolean).join(' ')
+  if (/could not find the .+ column/i.test(text)) return false
+  return /relation .+ does not exist|could not find the table/i.test(text)
+}
+
+export function isSchemaError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const { code, message, details, hint } = error as {
+    code?: string
+    message?: string
+    details?: string
+    hint?: string
+  }
+  if (['42P01', '42703', 'PGRST204', 'PGRST205'].includes(code ?? '')) return true
+  const text = [message, details, hint].filter(Boolean).join(' ')
+  return /does not exist|could not find the .+ (table|column)|schema cache/i.test(text)
 }
 
 export async function fetchState(userId: string): Promise<AppState> {
   const client = requireSupabase()
-  const [profileRes, exerciseRes, workoutRes, habitRes, checkRes] = await Promise.all([
+  const [profileRes, exerciseRes, workoutRes, habitRes, checkRes, routineRes] = await Promise.all([
     client.from('profiles').select('*').eq('user_id', userId).maybeSingle(),
     client.from('custom_exercises').select('*').eq('user_id', userId),
     client.from('workouts').select('*').eq('user_id', userId),
     client.from('habits').select('*').eq('user_id', userId),
     client.from('habit_checks').select('*').eq('user_id', userId),
+    client.from('routines').select('*').eq('user_id', userId),
   ])
   if (profileRes.error) throw profileRes.error
   if (exerciseRes.error) throw exerciseRes.error
   if (workoutRes.error) throw workoutRes.error
   if (habitRes.error && !isMissingTableError(habitRes.error)) throw habitRes.error
   if (checkRes.error && !isMissingTableError(checkRes.error)) throw checkRes.error
+  if (routineRes.error && !isMissingTableError(routineRes.error)) throw routineRes.error
 
   const profile = profileFromRow((profileRes.data as ProfileRow | null) ?? null)
   const customExercises = ((exerciseRes.data ?? []) as ExerciseRow[]).map(exerciseFromRow)
@@ -236,7 +314,10 @@ export async function fetchState(userId: string): Promise<AppState> {
   const habitChecks = checkRes.error
     ? []
     : ((checkRes.data ?? []) as HabitCheckRow[]).map(habitCheckFromRow)
-  return stateFromRows(profile, customExercises, workouts, habits, habitChecks)
+  const routines = routineRes.error
+    ? []
+    : ((routineRes.data ?? []) as RoutineRow[]).map(routineFromRow)
+  return stateFromRows(profile, customExercises, workouts, habits, habitChecks, routines)
 }
 
 export async function saveProfile(userId: string, profile: Profile): Promise<void> {
@@ -266,26 +347,36 @@ export async function removeWorkout(id: string): Promise<void> {
   if (error) throw error
 }
 
+export async function saveRoutine(userId: string, routine: Routine): Promise<void> {
+  const { error } = await requireSupabase().from('routines').upsert(routineToRow(userId, routine))
+  if (error) throw error
+}
+
+export async function removeRoutine(id: string): Promise<void> {
+  const { error } = await requireSupabase().from('routines').delete().eq('id', id)
+  if (error) throw error
+}
+
 export async function saveHabit(userId: string, habit: Habit): Promise<void> {
   const { error } = await requireSupabase().from('habits').upsert(habitToRow(userId, habit))
-  if (error && !isMissingTableError(error)) throw error
+  if (error) throw error
 }
 
 export async function removeHabit(id: string): Promise<void> {
   const { error } = await requireSupabase().from('habits').delete().eq('id', id)
-  if (error && !isMissingTableError(error)) throw error
+  if (error) throw error
 }
 
 export async function saveHabitCheck(userId: string, check: HabitCheck): Promise<void> {
   const { error } = await requireSupabase()
     .from('habit_checks')
     .upsert(habitCheckToRow(userId, check))
-  if (error && !isMissingTableError(error)) throw error
+  if (error) throw error
 }
 
 export async function removeHabitCheck(id: string): Promise<void> {
   const { error } = await requireSupabase().from('habit_checks').delete().eq('id', id)
-  if (error && !isMissingTableError(error)) throw error
+  if (error) throw error
 }
 
 /** Replaces every row for the user — used by import, demo load and reset. */
@@ -304,31 +395,40 @@ export async function replaceAll(userId: string, state: AppState): Promise<void>
   const habitDelete = await client.from('habits').delete().eq('user_id', userId)
   if (habitDelete.error && !isMissingTableError(habitDelete.error)) throw habitDelete.error
 
+  const routineDelete = await client.from('routines').delete().eq('user_id', userId)
+  if (routineDelete.error && !isMissingTableError(routineDelete.error)) throw routineDelete.error
+
   const profileResult = await client.from('profiles').upsert(profileToRow(userId, state.profile))
   if (profileResult.error) throw profileResult.error
 
   if (state.customExercises.length > 0) {
     const { error } = await client
       .from('custom_exercises')
-      .insert(state.customExercises.map((exercise) => exerciseToRow(userId, exercise)))
+      .upsert(state.customExercises.map((exercise) => exerciseToRow(userId, exercise)))
     if (error) throw error
   }
   if (state.workouts.length > 0) {
     const { error } = await client
       .from('workouts')
-      .insert(state.workouts.map((workout) => workoutToRow(userId, workout)))
+      .upsert(state.workouts.map((workout) => workoutToRow(userId, workout)))
     if (error) throw error
   }
   if (state.habits.length > 0) {
     const { error } = await client
       .from('habits')
-      .insert(state.habits.map((habit) => habitToRow(userId, habit)))
-    if (error && !isMissingTableError(error)) throw error
+      .upsert(state.habits.map((habit) => habitToRow(userId, habit)))
+    if (error) throw error
   }
   if (state.habitChecks.length > 0) {
     const { error } = await client
       .from('habit_checks')
-      .insert(state.habitChecks.map((check) => habitCheckToRow(userId, check)))
-    if (error && !isMissingTableError(error)) throw error
+      .upsert(state.habitChecks.map((check) => habitCheckToRow(userId, check)))
+    if (error) throw error
+  }
+  if (state.routines.length > 0) {
+    const { error } = await client
+      .from('routines')
+      .upsert(state.routines.map((routine) => routineToRow(userId, routine)))
+    if (error) throw error
   }
 }

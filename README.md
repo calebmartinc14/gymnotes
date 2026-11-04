@@ -35,6 +35,8 @@ npm run format        # Prettier
 - **Log workouts** — pick from 35+ exercises (or add your own), then enter date, sets, reps and weight.
 - **Bodyweight movements** — pull-ups, dips, push-ups and more record bodyweight as the load (plus any added weight), so they still produce volume and e1RM.
 - **Edit or delete sessions** — fix a typo or remove an entry from the Progress history.
+- **Training calendar** — browse workouts by date, review completed habits, and start a workout for the selected day.
+- **Habit tracking** — set weekly targets, check habits off by day, and review streaks and completion history.
 - **Estimated 1RM** — every session gets an Epley-estimated one-rep max from your best set, so progress is visible even when reps change.
 - **Progress charts** — track estimated strength or volume over time, absolutely or relative to bodyweight.
 - **Strength standards** — compare the big five lifts (bench, squat, deadlift, overhead press, barbell row) to approximate bodyweight standards, age-adjusted.
@@ -59,7 +61,7 @@ Supabase is optional. If it is not configured, GymNotes runs exactly as before �
 ### 1. Create the database
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. Open **SQL Editor → New query**, paste the contents of [`supabase/schema.sql`](./supabase/schema.sql), and run it. This creates the `profiles`, `custom_exercises` and `workouts` tables with Row Level Security so each user only sees their own rows.
+2. Open **SQL Editor → New query**, paste the full contents of [`supabase/schema.sql`](./supabase/schema.sql), and run it. It creates the profile, exercise, workout, habit, check-in, and routine tables and enables Row Level Security policies so each signed-in user only sees their own rows. Re-run the full script after schema updates; it is written to be repeatable.
 
 ### 2. Point the app at it
 
@@ -76,10 +78,11 @@ Restart `npm run dev`. A sign-in screen appears with email + password accounts (
 
 ### How sync behaves
 
-- **Supabase is the source of truth.** On sign-in the app loads your rows; writes go straight to Supabase.
-- **localStorage is the offline cache.** The current state is always mirrored under `gymnotes:v1` so the app still opens without a connection. If a cloud write fails, changes stay on the device and a banner explains it.
+- **Supabase is the source of truth for signed-in accounts.** On sign-in the app loads that account's rows.
+- **localStorage is the offline cache and write queue.** The current state is mirrored under `gymnotes:v1`; queued cloud writes are stored separately under `gymnotes:outbox:v1` and retried on reconnect and periodically. A failed write stays queued and the app explains whether the connection or database schema needs attention.
 - **Bring local data up.** If your account is empty but this browser has data, GymNotes offers to upload it. You can also use **Profile → Upload this device** at any time.
 - **Import / demo / reset** replace the whole dataset for the signed-in user.
+- **Account boundaries.** The browser cache is cleared when a signed-in account logs out or switches accounts. Export a backup before signing in on a shared browser if you need to preserve local-only data.
 
 ## How the strength comparison works
 
@@ -101,6 +104,19 @@ Local cache lives under the `gymnotes:v1` key in `localStorage`; cloud rows live
 - Open tabs stay in sync — changing data in one tab updates the others.
 - If the browser blocks storage (private mode, quota), a warning banner appears instead of failing silently.
 
+## Pre-release checks for multiple users
+
+Use a staging Supabase project with two test accounts and no real workout or profile data:
+
+1. Sign in as A, add a profile value, workout, custom exercise, habit, and check-in. Confirm they appear after refresh.
+2. Sign out, choose local mode, then sign in as B. Confirm none of A's profile, workouts, exercises, habits, or check-ins appear.
+3. Add a different set of records as B, then sign in as A again. Confirm A's original rows are intact and B's rows remain private.
+4. With B signed in, try reading A's rows through the Supabase client/API and confirm the RLS policies return no rows or deny the request.
+5. Disconnect the network, add and remove a workout and toggle a habit check, reconnect, then confirm the cloud converges to the final local state without duplicates.
+6. Import a backup, load demo data, and reset the test account. Confirm each operation affects only the signed-in test account.
+
+Run this only against a disposable staging project. The automated Vitest suite checks mapping, normalization, and queue behavior; it does not replace these live RLS and account-switch checks.
+
 ## Tech
 
 React 19 + TypeScript + Vite. Charts are hand-built SVG, no chart library. Styling is plain CSS split by area under `src/styles/`. Calculations, storage and the Supabase row mappers are pure modules covered by Vitest unit tests.
@@ -109,7 +125,7 @@ React 19 + TypeScript + Vite. Charts are hand-built SVG, no chart library. Styli
 src/
   components/   pages, chart, icons, auth screen, language switch, shared UI
   data/         exercise library + demo generator
-  lib/          calculations, strength standards, storage, i18n (+ locales), supabase, auth, remote (+ tests)
+  lib/          calculations, strength standards, storage, i18n (+ locales), sessions, sync, supabase, auth, remote (+ tests)
   styles/       base, layout, page-specific CSS, auth, responsive
 public/         favicon, web manifest, service worker
 supabase/       schema.sql (tables + Row Level Security)

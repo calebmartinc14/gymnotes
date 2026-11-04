@@ -88,6 +88,10 @@ export const es: Record<TranslationKey, string> = {
   'toast.demoLoaded': 'Datos de ejemplo cargados. Explora el panel y el progreso.',
   'toast.allDeleted': 'Todos los datos locales eliminados.',
   'toast.syncError': 'No se pudo guardar en la nube. Tus cambios se conservan en este dispositivo.',
+  'toast.syncQueued':
+    'Guardado en este dispositivo. Se sincronizará automáticamente cuando vuelva la conexión.',
+  'toast.syncSchemaRequired':
+    'La sincronización está pausada porque el esquema de la base de datos está desactualizado. Aplica el archivo supabase/schema.sql actualizado y vuelve a conectar.',
   'toast.uploaded': 'Datos de este dispositivo subidos a tu cuenta.',
   'toast.uploadPrompt': 'Este dispositivo tiene datos. ¿Subirlos a tu cuenta?',
   'toast.habitAdded': 'Hábito creado.',
@@ -495,14 +499,14 @@ export const es: Record<TranslationKey, string> = {
   'profile.deleteAria': 'Eliminar {name}',
   'profile.importNotBackup': 'Ese archivo no parece una copia de seguridad de GymNotes.',
   'profile.importSummary':
-    'Importar {workouts} entrenamientos, {exercises} ejercicios personalizados y {habits} hábitos',
+    'Importar {workouts} entrenamientos, {exercises} ejercicios personalizados, {habits} hábitos y {routines} rutinas',
   'profile.importSkipped': ' ({count} omitidos)',
   'profile.importProfileIssues': ' • Problemas de perfil: {issues}',
   'profile.importVersionMismatch': ' • Versión incompatible — datos migrados al formato actual',
   'profile.importConfirm':
     '{details}? Esto reemplaza los {count} entrenamientos que hay ahora en este dispositivo.',
   'profile.importRestoredSkipped':
-    'Copia restaurada. Se omitieron {workouts} entrenamiento(s), {exercises} ejercicio(s) y {habits} hábito(s) por datos no válidos.',
+    'Copia restaurada. Se omitieron {workouts} entrenamiento(s), {exercises} ejercicio(s), {habits} hábito(s) y {routines} rutina(s) por datos no válidos.',
   'profile.importReadError': 'No se pudo leer ese archivo. Elige una copia JSON de GymNotes.',
   'profile.demoConfirm':
     '¿Reemplazar tus entrenamientos y perfil actuales por 12 semanas de datos de ejemplo? Exporta una copia primero si quieres conservarlos.',

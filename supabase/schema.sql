@@ -50,8 +50,30 @@ create table if not exists public.workouts (
   updated_at    timestamptz not null default now()
 );
 
+-- Sessions group several exercise rows logged together. These columns are
+-- additive so existing installs keep working after re-running this file.
+alter table public.workouts add column if not exists session_id     text;
+alter table public.workouts add column if not exists session_name   text;
+alter table public.workouts add column if not exists superset_group integer;
+alter table public.workouts add column if not exists position       integer not null default 0;
+
 create index if not exists workouts_user_id_idx on public.workouts (user_id);
 create index if not exists workouts_user_exercise_idx on public.workouts (user_id, exercise_id);
+create index if not exists workouts_user_session_idx on public.workouts (user_id, session_id);
+
+-- ---------------------------------------------------------------------------
+-- Routines (saved exercise templates for the session builder)
+-- ---------------------------------------------------------------------------
+create table if not exists public.routines (
+  id         text primary key,
+  user_id    uuid        not null references auth.users (id) on delete cascade,
+  name       text        not null,
+  entries    jsonb       not null default '[]'::jsonb,
+  created_at bigint      not null default 0,
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists routines_user_id_idx on public.routines (user_id);
 
 -- ---------------------------------------------------------------------------
 -- Habits & check-ins (goals page)
@@ -89,6 +111,7 @@ alter table public.custom_exercises enable row level security;
 alter table public.workouts         enable row level security;
 alter table public.habits           enable row level security;
 alter table public.habit_checks     enable row level security;
+alter table public.routines         enable row level security;
 
 drop policy if exists "profiles are owned by the user" on public.profiles;
 create policy "profiles are owned by the user"
@@ -117,6 +140,12 @@ create policy "habits are owned by the user"
 drop policy if exists "habit checks are owned by the user" on public.habit_checks;
 create policy "habit checks are owned by the user"
   on public.habit_checks for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists "routines are owned by the user" on public.routines;
+create policy "routines are owned by the user"
+  on public.routines for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
@@ -149,4 +178,9 @@ create trigger habits_touch_updated_at
 drop trigger if exists habit_checks_touch_updated_at on public.habit_checks;
 create trigger habit_checks_touch_updated_at
   before update on public.habit_checks
+  for each row execute function public.touch_updated_at();
+
+drop trigger if exists routines_touch_updated_at on public.routines;
+create trigger routines_touch_updated_at
+  before update on public.routines
   for each row execute function public.touch_updated_at();

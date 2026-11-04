@@ -31,32 +31,31 @@ import {
   UserIcon,
   WarningIcon,
 } from './components/Icons'
-import { personalRecordIds } from './lib/calc'
+import { personalRecordIds, todayISO } from './lib/calc'
 import { demoState } from './data/demo'
 import {
   emptyState,
+  clearLocalAccountCache,
   loadState,
   newId,
   normalizeState,
+  readLocalOwner,
   saveState,
   STORAGE_KEY,
+  writeLocalOwner,
 } from './lib/storage'
 import { useI18n } from './lib/i18n'
 import { useAuth } from './lib/auth'
+import { fetchState, hasData, isSchemaError } from './lib/remote'
 import {
-  fetchState,
-  hasData,
-  removeExercise as removeExerciseRemote,
-  removeHabit as removeHabitRemote,
-  removeHabitCheck as removeHabitCheckRemote,
-  removeWorkout as removeWorkoutRemote,
-  replaceAll,
-  saveExercise as saveExerciseRemote,
-  saveHabit as saveHabitRemote,
-  saveHabitCheck as saveHabitCheckRemote,
-  saveProfile as saveProfileRemote,
-  saveWorkout as saveWorkoutRemote,
-} from './lib/remote'
+  createOperation,
+  enqueue,
+  enqueueSnapshot,
+  flushOutbox,
+  isNetworkError,
+  pendingFor,
+  type SyncPayload,
+} from './lib/sync'
 
 interface ToastState {
   id: number
@@ -66,25 +65,6 @@ interface ToastState {
 }
 
 const TAB_IDS: Tab[] = ['dashboard', 'log', 'progress', 'calendar', 'goals', 'profile']
-
-/** Which account the local cache belongs to, so it is never offered to another user. */
-const LOCAL_OWNER_KEY = 'gymnotes:local-owner'
-
-function readLocalOwner(): string | null {
-  try {
-    return localStorage.getItem(LOCAL_OWNER_KEY)
-  } catch {
-    return null
-  }
-}
-
-function writeLocalOwner(userId: string): void {
-  try {
-    localStorage.setItem(LOCAL_OWNER_KEY, userId)
-  } catch {
-    // ignore private-mode / quota errors
-  }
-}
 
 interface RouteState {
   tab: Tab
@@ -105,7 +85,7 @@ function buildHash(tab: Tab, exerciseId: string | null): string {
 
 export default function App() {
   const { t } = useI18n()
-  const { available, session, userId, email, showAuth, signOut, requestAuth } = useAuth()
+  const { available, ready, session, userId, email, showAuth, signOut, requestAuth } = useAuth()
   const tRef = useRef(t)
   tRef.current = t
 
@@ -117,9 +97,12 @@ export default function App() {
     typeof window === 'undefined' ? null : parseHash(window.location.hash).exerciseId,
   )
   const [editingWorkout, setEditingWorkout] = useState<Workout | null>(null)
+  const [logDate, setLogDate] = useState<string | undefined>()
   const [toast, setToast] = useState<ToastState | null>(null)
   const [storageWarning, setStorageWarning] = useState<string | null>(null)
   const [dataReady, setDataReady] = useState<boolean>(() => !available)
+  const lastUserIdRef = useRef<string | null>(userId)
+  const skipCacheWriteRef = useRef(false)
   const toastTimer = useRef<number | null>(null)
   const mainRef = useRef<HTMLElement | null>(null)
 
@@ -134,34 +117,92 @@ export default function App() {
     [],
   )
 
-  const pushRemote = useCallback(
-    async (fn: () => Promise<void>) => {
-      if (!available || !userId) return
-      try {
-        await fn()
-      } catch {
+  const flushingRef = useRef(false)
+  const syncNoticeRef = useRef(false)
+
+  const flush = useCallback(async () => {
+    if (!available || !userId || flushingRef.current) return
+    if (pendingFor(userId) === 0) return
+    flushingRef.current = true
+    try {
+      const result = await flushOutbox(userId)
+      if (!result.error) {
+        syncNoticeRef.current = false
+        return
+      }
+      if (syncNoticeRef.current) return
+      syncNoticeRef.current = true
+      if (isSchemaError(result.error)) {
+        notify(tRef.current('toast.syncSchemaRequired'), undefined, true)
+      } else if (isNetworkError(result.error)) {
+        notify(tRef.current('toast.syncQueued'), undefined, false)
+      } else {
         notify(tRef.current('toast.syncError'), undefined, true)
       }
+    } finally {
+      flushingRef.current = false
+    }
+  }, [available, userId, notify])
+
+  const schedule = useCallback(
+    (payload: SyncPayload) => {
+      if (!available || !userId) return
+      enqueue(createOperation(userId, payload))
+      void flush()
     },
-    [available, userId, notify],
+    [available, userId, flush],
   )
 
   const uploadLocal = useCallback(
     (source: AppState) => {
       setState(source)
-      if (userId) writeLocalOwner(userId)
-      void pushRemote(() => replaceAll(userId as string, source))
+      if (userId) {
+        writeLocalOwner(userId)
+        enqueueSnapshot(userId, source)
+        void flush()
+      }
       notify(tRef.current('toast.uploaded'))
     },
-    [pushRemote, userId, notify],
+    [flush, userId, notify],
   )
+
+  // Retry queued writes when the connection returns, on sign-in, and periodically.
+  useEffect(() => {
+    if (!available || !userId) return
+    void flush()
+    const onOnline = () => void flush()
+    window.addEventListener('online', onOnline)
+    const timer = window.setInterval(() => {
+      if (pendingFor(userId) > 0) void flush()
+    }, 20000)
+    return () => {
+      window.removeEventListener('online', onOnline)
+      window.clearInterval(timer)
+    }
+  }, [available, userId, flush])
 
   // Load remote data when a user signs in; fall back to the local cache offline.
   useEffect(() => {
+    syncNoticeRef.current = false
     if (!available || !userId) {
+      if (available && !ready) return
+      if (lastUserIdRef.current) {
+        lastUserIdRef.current = null
+        skipCacheWriteRef.current = true
+        setState(emptyState())
+        setEditingWorkout(null)
+        clearLocalAccountCache()
+      }
       setDataReady(true)
       return
     }
+    if (lastUserIdRef.current && lastUserIdRef.current !== userId) {
+      skipCacheWriteRef.current = true
+      setState(emptyState())
+      setEditingWorkout(null)
+      clearLocalAccountCache()
+    }
+    lastUserIdRef.current = userId
     let active = true
     setDataReady(false)
     void (async () => {
@@ -180,20 +221,28 @@ export default function App() {
             true,
           )
         }
-      } catch {
+      } catch (error) {
         if (!active) return
         setDataReady(true)
-        notify(tRef.current('toast.syncError'), undefined, true)
+        notify(
+          tRef.current(isSchemaError(error) ? 'toast.syncSchemaRequired' : 'toast.syncError'),
+          undefined,
+          true,
+        )
       }
     })()
     return () => {
       active = false
     }
-  }, [available, userId, notify, uploadLocal])
+  }, [available, ready, userId, notify, uploadLocal])
 
   // Keep the local cache in sync so the app still works offline.
   useEffect(() => {
     if (!dataReady) return
+    if (skipCacheWriteRef.current) {
+      skipCacheWriteRef.current = false
+      return
+    }
     const ok = saveState(state)
     if (!ok) {
       setStorageWarning(tRef.current('app.storageWarning'))
@@ -270,6 +319,11 @@ export default function App() {
     setTab('progress')
   }
 
+  function goLog(date?: string) {
+    setLogDate(date ?? todayISO())
+    go('log')
+  }
+
   function saveWorkout(workout: Workout) {
     const hadPrevious = state.workouts.some((item) => item.exerciseId === workout.exerciseId)
     const pr = personalRecordIds([...state.workouts, workout]).has(workout.id)
@@ -277,7 +331,7 @@ export default function App() {
     setProgressExercise(workout.exerciseId)
     setTab('progress')
     notify(!hadPrevious ? t('toast.firstSession') : pr ? t('toast.newPR') : t('toast.workoutSaved'))
-    void pushRemote(() => saveWorkoutRemote(userId as string, workout))
+    schedule({ kind: 'saveWorkout', workout })
   }
 
   function startEdit(workout: Workout) {
@@ -294,7 +348,7 @@ export default function App() {
     setProgressExercise(workout.exerciseId)
     setTab('progress')
     notify(t('toast.workoutUpdated'))
-    void pushRemote(() => saveWorkoutRemote(userId as string, workout))
+    schedule({ kind: 'saveWorkout', workout })
   }
 
   function cancelEdit() {
@@ -317,10 +371,10 @@ export default function App() {
           workouts: [...current.workouts, removed],
         }))
         notify(t('toast.workoutRestored'))
-        void pushRemote(() => saveWorkoutRemote(userId as string, removed))
+        schedule({ kind: 'saveWorkout', workout: removed })
       },
     })
-    void pushRemote(() => removeWorkoutRemote(id))
+    schedule({ kind: 'removeWorkout', workoutId: id })
   }
 
   function addExercise(exercise: Exercise) {
@@ -328,7 +382,7 @@ export default function App() {
       ...current,
       customExercises: [...current.customExercises, exercise],
     }))
-    void pushRemote(() => saveExerciseRemote(userId as string, exercise))
+    schedule({ kind: 'saveExercise', exercise })
   }
 
   function renameExercise(id: string, name: string, group: Exercise['group']) {
@@ -340,7 +394,7 @@ export default function App() {
       ),
     }))
     notify(t('toast.exerciseUpdated'))
-    void pushRemote(() => saveExerciseRemote(userId as string, updated))
+    schedule({ kind: 'saveExercise', exercise: updated })
   }
 
   function deleteExercise(id: string) {
@@ -354,20 +408,20 @@ export default function App() {
       customExercises: current.customExercises.filter((exercise) => exercise.id !== id),
     }))
     notify(t('toast.exerciseDeleted'))
-    void pushRemote(() => removeExerciseRemote(id))
+    schedule({ kind: 'removeExercise', exerciseId: id })
   }
 
   function saveProfile(profile: Profile) {
     setState((current) => ({ ...current, profile }))
     notify(t('toast.profileUpdated'))
-    void pushRemote(() => saveProfileRemote(userId as string, profile))
+    schedule({ kind: 'saveProfile', profile })
   }
 
   function addHabit(draft: HabitDraft) {
     const habit: Habit = { ...draft, id: newId('habit'), createdAt: Date.now() }
     setState((current) => ({ ...current, habits: [...current.habits, habit] }))
     notify(t('toast.habitAdded'))
-    void pushRemote(() => saveHabitRemote(userId as string, habit))
+    schedule({ kind: 'saveHabit', habit })
   }
 
   function updateHabit(habit: Habit) {
@@ -376,7 +430,7 @@ export default function App() {
       habits: current.habits.map((item) => (item.id === habit.id ? habit : item)),
     }))
     notify(t('toast.habitUpdated'))
-    void pushRemote(() => saveHabitRemote(userId as string, habit))
+    schedule({ kind: 'saveHabit', habit })
   }
 
   function deleteHabit(id: string) {
@@ -389,7 +443,7 @@ export default function App() {
       habitChecks: current.habitChecks.filter((check) => check.habitId !== id),
     }))
     notify(t('toast.habitDeleted'))
-    void pushRemote(() => removeHabitRemote(id))
+    schedule({ kind: 'removeHabit', habitId: id })
   }
 
   function toggleHabitCheck(habitId: string, date: string) {
@@ -401,7 +455,7 @@ export default function App() {
         ...current,
         habitChecks: current.habitChecks.filter((check) => check.id !== existing.id),
       }))
-      void pushRemote(() => removeHabitCheckRemote(existing.id))
+      schedule({ kind: 'removeHabitCheck', checkId: existing.id })
       return
     }
     const check: HabitCheck = {
@@ -411,13 +465,13 @@ export default function App() {
       createdAt: Date.now(),
     }
     setState((current) => ({ ...current, habitChecks: [...current.habitChecks, check] }))
-    void pushRemote(() => saveHabitCheckRemote(userId as string, check))
+    schedule({ kind: 'saveHabitCheck', check })
   }
 
   function importData(next: AppState) {
     setState(next)
     notify(t('toast.backupRestored'))
-    void pushRemote(() => replaceAll(userId as string, next))
+    if (userId) { enqueueSnapshot(userId, next); void flush() }
   }
 
   function loadDemo() {
@@ -427,7 +481,7 @@ export default function App() {
     setTab('dashboard')
     window.scrollTo(0, 0)
     notify(t('toast.demoLoaded'))
-    void pushRemote(() => replaceAll(userId as string, demo))
+    if (userId) { enqueueSnapshot(userId, demo); void flush() }
   }
 
   function resetAll() {
@@ -436,7 +490,7 @@ export default function App() {
     setTab('dashboard')
     setProgressExercise(null)
     notify(t('toast.allDeleted'))
-    void pushRemote(() => replaceAll(userId as string, empty))
+    if (userId) { enqueueSnapshot(userId, empty); void flush() }
   }
 
   function handleSignOut() {
@@ -527,7 +581,7 @@ export default function App() {
                 {t('profile.signIn')}
               </button>
             )}
-            <button type="button" className="btn btn-primary btn-sm" onClick={() => go('log')}>
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => goLog()}>
               <PlusIcon size={16} />
               {t('action.log')}
             </button>
@@ -554,7 +608,7 @@ export default function App() {
         {tab === 'dashboard' && (
           <Dashboard
             state={state}
-            onLog={() => go('log')}
+            onLog={goLog}
             onProgress={goProgress}
             onProfile={() => go('profile')}
             onLoadDemo={loadDemo}
@@ -563,6 +617,7 @@ export default function App() {
         <div hidden={tab !== 'log'}>
           <LogWorkout
             state={state}
+            initialDate={logDate}
             editing={editingWorkout}
             onSave={saveWorkout}
             onUpdate={updateWorkout}
@@ -577,12 +632,12 @@ export default function App() {
             initialExerciseId={progressExercise}
             onDeleteWorkout={deleteWorkout}
             onEditWorkout={startEdit}
-            onLog={() => go('log')}
+            onLog={goLog}
             onProfile={() => go('profile')}
           />
         )}
         {tab === 'calendar' && (
-          <CalendarPage state={state} onLog={() => go('log')} onProgress={goProgress} />
+          <CalendarPage state={state} onLog={goLog} onProgress={goProgress} />
         )}
         {tab === 'goals' && (
           <GoalsPage

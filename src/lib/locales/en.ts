@@ -87,6 +87,10 @@ export const en = {
   'toast.demoLoaded': 'Sample data loaded. Explore the dashboard and progress.',
   'toast.allDeleted': 'All local data deleted.',
   'toast.syncError': 'Could not save to the cloud. Your changes are kept on this device.',
+  'toast.syncQueued':
+    'Saved on this device. It will sync automatically when the connection returns.',
+  'toast.syncSchemaRequired':
+    'Cloud sync is paused because the database schema is outdated. Apply the latest supabase/schema.sql, then reconnect.',
   'toast.uploaded': "Uploaded this device's data to your account.",
   'toast.uploadPrompt': 'This device has data. Upload it to your account?',
   'toast.habitAdded': 'Habit created.',
@@ -483,14 +487,15 @@ export const en = {
   'profile.renameAria': 'Rename {name}',
   'profile.deleteAria': 'Delete {name}',
   'profile.importNotBackup': "That file doesn't look like a GymNotes backup.",
-  'profile.importSummary': 'Import {workouts} workouts, {exercises} custom exercises, {habits} habits',
+  'profile.importSummary':
+    'Import {workouts} workouts, {exercises} custom exercises, {habits} habits and {routines} routines',
   'profile.importSkipped': ' ({count} skipped)',
   'profile.importProfileIssues': ' • Profile issues: {issues}',
   'profile.importVersionMismatch': ' • Version mismatch — data migrated to current format',
   'profile.importConfirm':
     '{details}? This replaces the {count} workouts currently on this device.',
   'profile.importRestoredSkipped':
-    'Backup restored. {workouts} workout(s), {exercises} exercise(s) and {habits} habit(s) were skipped due to invalid data.',
+    'Backup restored. {workouts} workout(s), {exercises} exercise(s), {habits} habit(s) and {routines} routine(s) were skipped due to invalid data.',
   'profile.importReadError': 'Could not read that file. Choose a GymNotes JSON backup.',
   'profile.demoConfirm':
     'Replace your current workouts and profile with 12 weeks of sample data? Export a backup first if you want to keep them.',
