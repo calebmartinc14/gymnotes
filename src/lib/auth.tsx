@@ -10,6 +10,13 @@ export type AuthErrorKey =
 
 const LOCAL_MODE_KEY = 'gymnotes:local-mode'
 
+export function authRedirectUrl(currentUrl: string): string {
+  const url = new URL(currentUrl)
+  url.search = ''
+  url.hash = ''
+  return url.toString()
+}
+
 function mapAuthError(message: string): AuthErrorKey {
   const text = message.toLowerCase()
   if (text.includes('invalid login')) return 'auth.errInvalid'
@@ -127,7 +134,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = useCallback<AuthValue['signUp']>(async (email, password) => {
     if (!supabase) return { error: 'auth.errGeneric', needsConfirmation: false }
-    const { data, error } = await supabase.auth.signUp({ email, password })
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: authRedirectUrl(window.location.href) },
+    })
     if (error) return { error: mapAuthError(error.message), needsConfirmation: false }
     return { error: null, needsConfirmation: !data.session }
   }, [])

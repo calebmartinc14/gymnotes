@@ -76,7 +76,16 @@ VITE_SUPABASE_ANON_KEY=your-anon-public-key
 
 Restart `npm run dev`. A sign-in screen appears with email + password accounts (Supabase Auth). "Continue without an account" keeps the app local-only.
 
-> Email confirmation is on by default. Turn it off in **Authentication → Providers → Email** if you want instant sign-in during development.
+In **Authentication → URL Configuration**, set **Site URL** to `https://calebmartinc14.github.io/gymnotes/` and add these exact **Redirect URLs**:
+
+```text
+https://calebmartinc14.github.io/gymnotes/
+http://localhost:5173/
+```
+
+Signup now sends the current app path as `emailRedirectTo`, so production registrations return to GitHub Pages while local registrations return to localhost. If you customized the confirmation email template, use `{{ .ConfirmationURL }}` for its link rather than hard-coding `{{ .SiteURL }}`.
+
+> Email confirmation is on by default. Turn it off in **Authentication → Providers → Email** only if you want instant sign-in during development.
 
 ### How sync behaves
 
