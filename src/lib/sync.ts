@@ -116,7 +116,7 @@ export function enqueueSnapshot(userId: string, state: AppState): SyncOperation[
 export async function defaultExecutor(operation: SyncOperation): Promise<void> {
   switch (operation.kind) {
     case 'replaceAll':
-      return replaceAll(operation.userId, operation.state)
+      return replaceAll(operation.state)
     case 'saveProfile':
       return saveProfile(operation.userId, operation.profile)
     case 'saveExercise':

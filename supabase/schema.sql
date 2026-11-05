@@ -149,6 +149,110 @@ create policy "routines are owned by the user"
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
+-- Replace the signed-in user's complete dataset as one database transaction.
+-- SECURITY INVOKER keeps the table grants and RLS policies in force.
+create or replace function public.replace_gymnotes_state(p_state jsonb)
+returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  owner_id uuid := auth.uid();
+  profile_data jsonb;
+begin
+  if owner_id is null then
+    raise exception 'Authentication required to replace GymNotes data';
+  end if;
+  if jsonb_typeof(p_state) is distinct from 'object' then
+    raise exception 'Invalid GymNotes state';
+  end if;
+
+  profile_data := coalesce(p_state->'profile', '{}'::jsonb);
+
+  delete from public.habit_checks where user_id = owner_id;
+  delete from public.habits where user_id = owner_id;
+  delete from public.routines where user_id = owner_id;
+  delete from public.workouts where user_id = owner_id;
+  delete from public.custom_exercises where user_id = owner_id;
+
+  insert into public.profiles (user_id, name, sex, age, height_cm, weight_kg, unit)
+  values (
+    owner_id,
+    coalesce(profile_data->>'name', ''),
+    coalesce(profile_data->>'sex', 'male'),
+    nullif(profile_data->>'age', '')::integer,
+    nullif(profile_data->>'heightCm', '')::numeric,
+    nullif(profile_data->>'weightKg', '')::numeric,
+    coalesce(profile_data->>'unit', 'kg')
+  )
+  on conflict (user_id) do update set
+    name = excluded.name,
+    sex = excluded.sex,
+    age = excluded.age,
+    height_cm = excluded.height_cm,
+    weight_kg = excluded.weight_kg,
+    unit = excluded.unit;
+
+  insert into public.custom_exercises (id, user_id, name, muscle_group)
+  select item->>'id', owner_id, item->>'name', item->>'group'
+  from jsonb_array_elements(
+    case when jsonb_typeof(p_state->'customExercises') = 'array'
+      then p_state->'customExercises' else '[]'::jsonb end
+  ) as items(item);
+
+  insert into public.workouts (
+    id, user_id, date, exercise_id, sets, bodyweight_kg, notes, created_at,
+    session_id, session_name, superset_group, position
+  )
+  select
+    item->>'id', owner_id, (item->>'date')::date, item->>'exerciseId',
+    coalesce(item->'sets', '[]'::jsonb),
+    nullif(item->>'bodyweightKg', '')::numeric,
+    item->>'notes', coalesce(nullif(item->>'createdAt', '')::bigint, 0),
+    nullif(item->>'sessionId', ''), nullif(item->>'sessionName', ''),
+    nullif(item->>'supersetGroup', '')::integer,
+    coalesce(nullif(item->>'position', '')::integer, 0)
+  from jsonb_array_elements(
+    case when jsonb_typeof(p_state->'workouts') = 'array'
+      then p_state->'workouts' else '[]'::jsonb end
+  ) as items(item);
+
+  insert into public.habits (id, user_id, name, target_per_week, note, created_at)
+  select
+    item->>'id', owner_id, item->>'name',
+    coalesce(nullif(item->>'targetPerWeek', '')::integer, 7),
+    coalesce(item->>'note', ''), coalesce(nullif(item->>'createdAt', '')::bigint, 0)
+  from jsonb_array_elements(
+    case when jsonb_typeof(p_state->'habits') = 'array'
+      then p_state->'habits' else '[]'::jsonb end
+  ) as items(item);
+
+  insert into public.habit_checks (id, user_id, habit_id, date, created_at)
+  select
+    item->>'id', owner_id, item->>'habitId', (item->>'date')::date,
+    coalesce(nullif(item->>'createdAt', '')::bigint, 0)
+  from jsonb_array_elements(
+    case when jsonb_typeof(p_state->'habitChecks') = 'array'
+      then p_state->'habitChecks' else '[]'::jsonb end
+  ) as items(item);
+
+  insert into public.routines (id, user_id, name, entries, created_at)
+  select
+    item->>'id', owner_id, item->>'name',
+    case when jsonb_typeof(item->'entries') = 'array'
+      then item->'entries' else '[]'::jsonb end,
+    coalesce(nullif(item->>'createdAt', '')::bigint, 0)
+  from jsonb_array_elements(
+    case when jsonb_typeof(p_state->'routines') = 'array'
+      then p_state->'routines' else '[]'::jsonb end
+  ) as items(item);
+end;
+$$;
+
+revoke all on function public.replace_gymnotes_state(jsonb) from public, anon;
+grant execute on function public.replace_gymnotes_state(jsonb) to authenticated;
+
 -- Keep updated_at fresh on writes.
 create or replace function public.touch_updated_at()
 returns trigger

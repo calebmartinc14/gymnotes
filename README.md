@@ -81,7 +81,7 @@ Restart `npm run dev`. A sign-in screen appears with email + password accounts (
 - **Supabase is the source of truth for signed-in accounts.** On sign-in the app loads that account's rows.
 - **localStorage is the offline cache and write queue.** The current state is mirrored under `gymnotes:v1`; queued cloud writes are stored separately under `gymnotes:outbox:v1` and retried on reconnect and periodically. A failed write stays queued and the app explains whether the connection or database schema needs attention.
 - **Bring local data up.** If your account is empty but this browser has data, GymNotes offers to upload it. You can also use **Profile → Upload this device** at any time.
-- **Import / demo / reset** replace the whole dataset for the signed-in user.
+- **Import / demo / reset** replace the whole dataset for the signed-in user in one database transaction, so a failed replacement cannot leave only part of the cloud data written. This requires the latest `supabase/schema.sql` function.
 - **Account boundaries.** The browser cache is cleared when a signed-in account logs out or switches accounts. Export a backup before signing in on a shared browser if you need to preserve local-only data.
 
 ## How the strength comparison works

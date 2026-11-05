@@ -1,10 +1,11 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
   exerciseFromRow,
   exerciseToRow,
   hasData,
   isMissingTableError,
   isSchemaError,
+  replaceAll,
   profileFromRow,
   profileToRow,
   stateFromRows,
@@ -13,6 +14,14 @@ import {
 } from './remote'
 import type { ExerciseRow, ProfileRow, WorkoutRow } from './remote'
 import { emptyState } from './storage'
+
+const { rpcMock } = vi.hoisted(() => ({ rpcMock: vi.fn() }))
+
+vi.mock('./supabase', () => ({
+  requireSupabase: () => ({ rpc: rpcMock }),
+}))
+
+beforeEach(() => rpcMock.mockReset())
 
 describe('workout row mapping', () => {
   it('round-trips a workout', () => {
@@ -164,6 +173,12 @@ describe('isMissingTableError', () => {
     }
     expect(isMissingTableError(missingColumn)).toBe(false)
     expect(isSchemaError(missingColumn)).toBe(true)
+    expect(
+      isSchemaError({
+        code: 'PGRST202',
+        message: 'Could not find the function public.replace_gymnotes_state in the schema cache',
+      }),
+    ).toBe(true)
     expect(isSchemaError({ code: '42501', message: 'permission denied' })).toBe(false)
   })
 })
@@ -191,5 +206,25 @@ describe('hasData', () => {
       ],
     )
     expect(hasData(state)).toBe(true)
+  })
+})
+
+describe('replaceAll', () => {
+  it('sends one full-state RPC so the server can replace the dataset transactionally', async () => {
+    rpcMock.mockResolvedValue({ error: null })
+    const state = emptyState()
+    state.profile.name = 'Sam'
+
+    await replaceAll(state)
+
+    expect(rpcMock).toHaveBeenCalledOnce()
+    expect(rpcMock).toHaveBeenCalledWith('replace_gymnotes_state', { p_state: state })
+  })
+
+  it('keeps a failed replacement visible to the sync outbox', async () => {
+    const failure = new Error('database unavailable')
+    rpcMock.mockResolvedValue({ error: failure })
+
+    await expect(replaceAll(emptyState())).rejects.toBe(failure)
   })
 })

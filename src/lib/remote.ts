@@ -283,9 +283,9 @@ export function isSchemaError(error: unknown): boolean {
     details?: string
     hint?: string
   }
-  if (['42P01', '42703', 'PGRST204', 'PGRST205'].includes(code ?? '')) return true
+  if (['42P01', '42703', 'PGRST202', 'PGRST204', 'PGRST205'].includes(code ?? '')) return true
   const text = [message, details, hint].filter(Boolean).join(' ')
-  return /does not exist|could not find the .+ (table|column)|schema cache/i.test(text)
+  return /does not exist|could not find the .+ (function|table|column)|schema cache/i.test(text)
 }
 
 export async function fetchState(userId: string): Promise<AppState> {
@@ -379,56 +379,8 @@ export async function removeHabitCheck(id: string): Promise<void> {
   if (error) throw error
 }
 
-/** Replaces every row for the user — used by import, demo load and reset. */
-export async function replaceAll(userId: string, state: AppState): Promise<void> {
-  const client = requireSupabase()
-  const [workoutDelete, exerciseDelete] = await Promise.all([
-    client.from('workouts').delete().eq('user_id', userId),
-    client.from('custom_exercises').delete().eq('user_id', userId),
-  ])
-  if (workoutDelete.error) throw workoutDelete.error
-  if (exerciseDelete.error) throw exerciseDelete.error
-
-  const checkDelete = await client.from('habit_checks').delete().eq('user_id', userId)
-  if (checkDelete.error && !isMissingTableError(checkDelete.error)) throw checkDelete.error
-
-  const habitDelete = await client.from('habits').delete().eq('user_id', userId)
-  if (habitDelete.error && !isMissingTableError(habitDelete.error)) throw habitDelete.error
-
-  const routineDelete = await client.from('routines').delete().eq('user_id', userId)
-  if (routineDelete.error && !isMissingTableError(routineDelete.error)) throw routineDelete.error
-
-  const profileResult = await client.from('profiles').upsert(profileToRow(userId, state.profile))
-  if (profileResult.error) throw profileResult.error
-
-  if (state.customExercises.length > 0) {
-    const { error } = await client
-      .from('custom_exercises')
-      .upsert(state.customExercises.map((exercise) => exerciseToRow(userId, exercise)))
-    if (error) throw error
-  }
-  if (state.workouts.length > 0) {
-    const { error } = await client
-      .from('workouts')
-      .upsert(state.workouts.map((workout) => workoutToRow(userId, workout)))
-    if (error) throw error
-  }
-  if (state.habits.length > 0) {
-    const { error } = await client
-      .from('habits')
-      .upsert(state.habits.map((habit) => habitToRow(userId, habit)))
-    if (error) throw error
-  }
-  if (state.habitChecks.length > 0) {
-    const { error } = await client
-      .from('habit_checks')
-      .upsert(state.habitChecks.map((check) => habitCheckToRow(userId, check)))
-    if (error) throw error
-  }
-  if (state.routines.length > 0) {
-    const { error } = await client
-      .from('routines')
-      .upsert(state.routines.map((routine) => routineToRow(userId, routine)))
-    if (error) throw error
-  }
+/** Atomically replaces the signed-in user's rows — used by import, demo load and reset. */
+export async function replaceAll(state: AppState): Promise<void> {
+  const { error } = await requireSupabase().rpc('replace_gymnotes_state', { p_state: state })
+  if (error) throw error
 }
