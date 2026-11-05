@@ -1,4 +1,4 @@
-export type Tab = 'dashboard' | 'log' | 'progress' | 'calendar' | 'goals' | 'profile'
+export type Tab = 'dashboard' | 'log' | 'progress' | 'calendar' | 'goals' | 'feedback' | 'profile'
 
 export type Sex = 'male' | 'female' | 'other'
 export type Unit = 'kg' | 'lb'

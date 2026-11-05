@@ -108,7 +108,7 @@
     left: 0;
     z-index: 60;
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 0;
     padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
     border-right: 0;

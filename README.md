@@ -37,6 +37,7 @@ npm run format        # Prettier
 - **Edit or delete sessions** — fix a typo or remove an entry from the Progress history.
 - **Training calendar** — browse workouts by date, review completed habits, and start a workout for the selected day.
 - **Habit tracking** — set weekly targets, check habits off by day, and review streaks and completion history.
+- **Private beta feedback** — signed-in users can send private bug reports or ideas; only accounts explicitly listed as project admins can view and triage the inbox.
 - **Estimated 1RM** — every session gets an Epley-estimated one-rep max from your best set, so progress is visible even when reps change.
 - **Progress charts** — track estimated strength or volume over time, absolutely or relative to bodyweight.
 - **Strength standards** — compare the big five lifts (bench, squat, deadlift, overhead press, barbell row) to approximate bodyweight standards, age-adjusted.
@@ -61,7 +62,8 @@ Supabase is optional. If it is not configured, GymNotes runs exactly as before �
 ### 1. Create the database
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. Open **SQL Editor → New query**, paste the full contents of [`supabase/schema.sql`](./supabase/schema.sql), and run it. It creates the profile, exercise, workout, habit, check-in, and routine tables and enables Row Level Security policies so each signed-in user only sees their own rows. Re-run the full script after schema updates; it is written to be repeatable.
+2. Open **SQL Editor → New query**, paste the full contents of [`supabase/schema.sql`](./supabase/schema.sql), and run it. It creates the profile, exercise, workout, habit, check-in, routine, and private feedback tables and enables Row Level Security policies. Re-run the full script after schema updates; it is written to be repeatable.
+3. Create/sign in to your owner account, then run the admin assignment query at the bottom of `supabase/schema.sql` with your Supabase login email. Only accounts in `admin_users` can read or triage feedback; the UI check is backed by RLS.
 
 ### 2. Point the app at it
 
@@ -83,6 +85,7 @@ Restart `npm run dev`. A sign-in screen appears with email + password accounts (
 - **Bring local data up.** If your account is empty but this browser has data, GymNotes offers to upload it. You can also use **Profile → Upload this device** at any time.
 - **Import / demo / reset** replace the whole dataset for the signed-in user in one database transaction, so a failed replacement cannot leave only part of the cloud data written. This requires the latest `supabase/schema.sql` function.
 - **Account boundaries.** The browser cache is cleared when a signed-in account logs out or switches accounts. Export a backup before signing in on a shared browser if you need to preserve local-only data.
+- **Feedback privacy.** Submissions require sign-in and are tied to that account. Regular users can submit but cannot read the inbox or other users' messages. This is a private inbox, not a public forum.
 
 ## How the strength comparison works
 
@@ -123,7 +126,7 @@ React 19 + TypeScript + Vite. Charts are hand-built SVG, no chart library. Styli
 
 ```
 src/
-  components/   pages, chart, icons, auth screen, language switch, shared UI
+  components/   pages, chart, icons, auth screen, language switch, feedback inbox, shared UI
   data/         exercise library + demo generator
   lib/          calculations, strength standards, storage, i18n (+ locales), sessions, sync, supabase, auth, remote (+ tests)
   styles/       base, layout, page-specific CSS, auth, responsive

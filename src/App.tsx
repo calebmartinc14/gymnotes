@@ -16,6 +16,7 @@ import { GoalsPage } from './components/Goals'
 import { LogWorkout } from './components/LogWorkout'
 import { Progress } from './components/Progress'
 import { ProfilePage } from './components/Profile'
+import { FeedbackPage } from './components/Feedback'
 import { AuthScreen } from './components/AuthScreen'
 import { LanguageSwitch } from './components/LanguageSwitch'
 import {
@@ -26,6 +27,7 @@ import {
   DumbbellIcon,
   GridIcon,
   LogOutIcon,
+  MessageIcon,
   PlusIcon,
   TargetIcon,
   UserIcon,
@@ -46,6 +48,7 @@ import {
 } from './lib/storage'
 import { useI18n } from './lib/i18n'
 import { useAuth } from './lib/auth'
+import { checkFeedbackAdmin } from './lib/feedback'
 import { fetchState, hasData, isSchemaError } from './lib/remote'
 import {
   createOperation,
@@ -64,7 +67,7 @@ interface ToastState {
   persistent?: boolean
 }
 
-const TAB_IDS: Tab[] = ['dashboard', 'log', 'progress', 'calendar', 'goals', 'profile']
+const TAB_IDS: Tab[] = ['dashboard', 'log', 'progress', 'calendar', 'goals', 'feedback', 'profile']
 
 interface RouteState {
   tab: Tab
@@ -97,6 +100,7 @@ export default function App() {
     typeof window === 'undefined' ? null : parseHash(window.location.hash).exerciseId,
   )
   const [editingWorkout, setEditingWorkout] = useState<Workout | null>(null)
+  const [isFeedbackAdmin, setIsFeedbackAdmin] = useState(false)
   const [logDate, setLogDate] = useState<string | undefined>()
   const [toast, setToast] = useState<ToastState | null>(null)
   const [storageWarning, setStorageWarning] = useState<string | null>(null)
@@ -105,6 +109,22 @@ export default function App() {
   const skipCacheWriteRef = useRef(false)
   const toastTimer = useRef<number | null>(null)
   const mainRef = useRef<HTMLElement | null>(null)
+
+  useEffect(() => {
+    setIsFeedbackAdmin(false)
+    if (!available || !userId) return
+    let active = true
+    void checkFeedbackAdmin(userId)
+      .then((isAdmin) => {
+        if (active) setIsFeedbackAdmin(isAdmin)
+      })
+      .catch(() => {
+        if (active) setIsFeedbackAdmin(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [available, userId])
 
   const notify = useCallback(
     (message: string, action?: ToastState['action'], persistent = false) => {
@@ -292,6 +312,7 @@ export default function App() {
       progress: t('title.progress'),
       calendar: t('title.calendar'),
       goals: t('title.goals'),
+      feedback: t('title.feedback'),
       profile: t('title.profile'),
     }
     document.title = `GymNotes — ${titles[tab]}`
@@ -518,6 +539,7 @@ export default function App() {
     { id: 'progress', label: t('nav.progress'), icon: <ChartIcon size={19} /> },
     { id: 'calendar', label: t('nav.calendar'), icon: <CalendarIcon size={19} /> },
     { id: 'goals', label: t('nav.goals'), icon: <TargetIcon size={19} /> },
+    { id: 'feedback', label: t('nav.feedback'), icon: <MessageIcon size={19} /> },
     { id: 'profile', label: t('nav.profile'), icon: <UserIcon size={19} /> },
   ]
 
@@ -646,6 +668,14 @@ export default function App() {
             onUpdateHabit={updateHabit}
             onDeleteHabit={deleteHabit}
             onToggleCheck={toggleHabitCheck}
+          />
+        )}
+        {tab === 'feedback' && (
+          <FeedbackPage
+            userId={userId}
+            isAdmin={isFeedbackAdmin}
+            authAvailable={available}
+            onRequestAuth={requestAuth}
           />
         )}
         {tab === 'profile' && (

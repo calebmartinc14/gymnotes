@@ -76,6 +76,26 @@ create table if not exists public.routines (
 create index if not exists routines_user_id_idx on public.routines (user_id);
 
 -- ---------------------------------------------------------------------------
+-- Private feedback inbox. Admin rows are assigned manually by the project owner.
+-- ---------------------------------------------------------------------------
+create table if not exists public.admin_users (
+  user_id uuid primary key references auth.users (id) on delete cascade
+);
+
+create table if not exists public.feedback (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references auth.users (id) on delete cascade,
+  category   text not null check (category in ('bug', 'idea', 'other')),
+  message    text not null check (char_length(message) between 10 and 2000),
+  status     text not null default 'new' check (status in ('new', 'reviewing', 'resolved')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists feedback_created_at_idx on public.feedback (created_at desc);
+create index if not exists feedback_user_id_idx on public.feedback (user_id);
+
+-- ---------------------------------------------------------------------------
 -- Habits & check-ins (goals page)
 -- ---------------------------------------------------------------------------
 create table if not exists public.habits (
@@ -112,6 +132,8 @@ alter table public.workouts         enable row level security;
 alter table public.habits           enable row level security;
 alter table public.habit_checks     enable row level security;
 alter table public.routines         enable row level security;
+alter table public.admin_users      enable row level security;
+alter table public.feedback         enable row level security;
 
 drop policy if exists "profiles are owned by the user" on public.profiles;
 create policy "profiles are owned by the user"
@@ -148,6 +170,33 @@ create policy "routines are owned by the user"
   on public.routines for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+drop policy if exists "admins can read their own admin assignment" on public.admin_users;
+create policy "admins can read their own admin assignment"
+  on public.admin_users for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "signed-in users can submit feedback as themselves" on public.feedback;
+create policy "signed-in users can submit feedback as themselves"
+  on public.feedback for insert
+  with check (auth.uid() = user_id);
+
+drop policy if exists "admins can read feedback" on public.feedback;
+create policy "admins can read feedback"
+  on public.feedback for select
+  using (exists (
+    select 1 from public.admin_users where admin_users.user_id = auth.uid()
+  ));
+
+drop policy if exists "admins can update feedback status" on public.feedback;
+create policy "admins can update feedback status"
+  on public.feedback for update
+  using (exists (
+    select 1 from public.admin_users where admin_users.user_id = auth.uid()
+  ))
+  with check (exists (
+    select 1 from public.admin_users where admin_users.user_id = auth.uid()
+  ));
 
 -- Replace the signed-in user's complete dataset as one database transaction.
 -- SECURITY INVOKER keeps the table grants and RLS policies in force.
@@ -288,3 +337,14 @@ drop trigger if exists routines_touch_updated_at on public.routines;
 create trigger routines_touch_updated_at
   before update on public.routines
   for each row execute function public.touch_updated_at();
+
+drop trigger if exists feedback_touch_updated_at on public.feedback;
+create trigger feedback_touch_updated_at
+  before update on public.feedback
+  for each row execute function public.touch_updated_at();
+
+-- After creating your owner account, grant it access to the private inbox by
+-- replacing the email below and running this once in the SQL editor:
+-- insert into public.admin_users (user_id)
+-- select id from auth.users where email = 'YOUR_OWNER_LOGIN_EMAIL'
+-- on conflict (user_id) do nothing;

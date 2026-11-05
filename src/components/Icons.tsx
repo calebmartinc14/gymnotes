@@ -62,6 +62,15 @@ export function UserIcon(props: IconProps) {
   )
 }
 
+export function MessageIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H7l-3 2v-5.5A7.5 7.5 0 1 1 20 11.5Z" />
+      <path d="M8 11.5h8M8 14.5h5" />
+    </svg>
+  )
+}
+
 export function FlameIcon(props: IconProps) {
   return (
     <svg {...base(props)}>
