@@ -1,8 +1,16 @@
 /* GymNotes service worker — offline app shell.
  * Hashed assets are cache-first (safe because the name changes each build);
  * navigations are network-first with a cached shell fallback. */
-const CACHE = 'gymnotes-v1'
-const APP_SHELL = ['./', './index.html', './favicon.svg', './manifest.webmanifest']
+const CACHE = 'gymnotes-v2'
+const APP_SHELL = [
+  './',
+  './index.html',
+  './favicon.svg',
+  './apple-touch-icon.png',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './manifest.webmanifest',
+]
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
